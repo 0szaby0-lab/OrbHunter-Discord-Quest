@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, AttachmentBuilder } from 'discord.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { RemoteAuthSession } from '../engine/remote-auth.js';
+import { proxyManager } from '../engine/proxy-manager.js';
 import { saveToken, getDecryptedToken, removeToken, listTokens } from '../database/sqlite.js';
 import { ok, warn, err, ui, E } from '../utils/embeds.js';
 import { maskToken } from '../utils/crypto.js';
@@ -31,7 +32,9 @@ export const commands = [
 export async function handleQrLogin(ix, label = 'main') {
   await ix.deferReply({ ephemeral: true });
   const uid = ix.user.id;
-  const session = new RemoteAuthSession();
+
+  const proxyUrl = await proxyManager.getLoginProxy();
+  const session = new RemoteAuthSession({ proxyUrl });
 
   session.on('qr', async ({ buffer }) => {
     const attachment = new AttachmentBuilder(buffer, { name: 'discord-login-qr.png' });
@@ -119,9 +122,18 @@ export async function handleQrLogin(ix, label = 'main') {
     console.error('Remote auth error:', error.message);
     const isCaptcha = error.message && error.message.includes('captcha-required');
     const title = isCaptcha ? 'Discord Felhős Védelem (Captcha)' : 'Csatlakozási hiba';
+    const proxyStatus = proxyUrl ? `🛡️ *Használt login proxy:* \`${proxyUrl}\` (Discord által blokkolva)` : '🌐 *Közvetlen Render IP használatban*';
     const desc = isCaptcha
-      ? `${E.warn()} **A Discord felhős szerverről (Render) captchát kér a QR-kódhoz.**\nDatacenter IP-kről a Discord nem engedi a QR-kódos átjárót.\n\n👉 **Megoldás:** Használd a **🔑 Token Megadása** gombot a panelen vagy a \`/token add\` parancsot a tokened közvetlen megadásához!`
-      : `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához.`;
+      ? [
+          `${E.warn()} **A Discord felhős IP-ről captchát kért a QR-kódhoz.**`,
+          proxyStatus,
+          '',
+          `👉 **Azonnali megoldás:** Nyomd meg a **🔑 Token Megadása** gombot a panelen vagy futtasd a \`/token add\` parancsot! A token megadása után a küldetések automatizálása 100%-ban lefut a szerver saját IP-jéről captcha nélkül.`,
+          '',
+          `💡 *Tipp:* Ha Renderen is QR-kódot szeretnél, állíts be egy megbízható lakossági/ingyenes proxyt a Render Environmentben (\`LOGIN_PROXY=http://...\`).`,
+        ].join('\n')
+      : `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához (${error.message}). Használd a **🔑 Token Megadása** gombot!`;
+
     await ix.editReply({
       embeds: [err(title, desc)],
       files: [],
