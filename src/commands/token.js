@@ -117,8 +117,13 @@ export async function handleQrLogin(ix, label = 'main') {
 
   session.on('error', async (error) => {
     console.error('Remote auth error:', error.message);
+    const isCaptcha = error.message && error.message.includes('captcha-required');
+    const title = isCaptcha ? 'Discord Felhős Védelem (Captcha)' : 'Csatlakozási hiba';
+    const desc = isCaptcha
+      ? `${E.warn()} **A Discord felhős szerverről (Render) captchát kér a QR-kódhoz.**\nDatacenter IP-kről a Discord nem engedi a QR-kódos átjárót.\n\n👉 **Megoldás:** Használd a **🔑 Token Megadása** gombot a panelen vagy a \`/token add\` parancsot a tokened közvetlen megadásához!`
+      : `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához.`;
     await ix.editReply({
-      embeds: [err('Csatlakozási hiba', `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához.`)],
+      embeds: [err(title, desc)],
       files: [],
     }).catch(() => {});
   });

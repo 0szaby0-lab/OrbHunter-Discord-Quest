@@ -1,8 +1,8 @@
-import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { ok, warn, err, E, questListEmbed, statusEmbed, helpEmbed } from '../utils/embeds.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
-import { getSettings, saveSettings, getDecryptedToken, listTokens, removeToken } from '../database/sqlite.js';
+import { getSettings, saveSettings, getDecryptedToken, listTokens, removeToken, saveToken } from '../database/sqlite.js';
 import { filterRunnableQuests } from '../engine/quest-parser.js';
 import { runMode, ctx, fetchParsed } from './quests.js';
 import { handleQrLogin } from './token.js';
@@ -54,7 +54,8 @@ export function buildPanelMessage() {
       {
         name: `${E.key()}  FIÓK & BEJELENTKEZÉS`,
         value: [
-          '>>> 📱 **QR Belépés** — Discord fiók csatlakoztatása mobil QR beolvasással',
+          '>>> 📱 **QR Belépés** — Discord belépés mobil QR kóddal',
+          '🔑 **Token Megadása** — Felhős környezetben (Render) a legstabilabb belépés',
           '🔍 **Fiók Info** — Csatlakoztatott profil és aktív küldetésszám',
           '📑 **Fiókjaim Listája** — Elmentett profiljaid megtekintése',
           '🗑️ **Kijelentkezés** — Fiók és token azonnali törlése az adatbázisból',
@@ -149,6 +150,11 @@ export function buildPanelMessage() {
       .setLabel('QR Belépés')
       .setEmoji('📱')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('btn_manual_token')
+      .setLabel('Token Megadása')
+      .setEmoji('🔑')
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('btn_check')
       .setLabel('Fiók Info')
@@ -378,10 +384,27 @@ export async function handlePanelButton(ix) {
     }
   }
 
+  if (id === 'btn_manual_token') {
+    const modal = new ModalBuilder()
+      .setCustomId('modal_token_input')
+      .setTitle('Discord Token Megadása');
+
+    const tokenInput = new TextInputBuilder()
+      .setCustomId('input_user_token')
+      .setLabel('Illeszd be a Discord User Tokenedet:')
+      .setPlaceholder('Illeszd be a Discord felhasználói tokenedet...')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const actionRow = new ActionRowBuilder().addComponents(tokenInput);
+    modal.addComponents(actionRow);
+    return ix.showModal(modal);
+  }
+
   if (id === 'btn_token_list') {
     const tokens = listTokens(uid);
     if (!tokens.length) {
-      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** gombot.`)], ephemeral: true });
+      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** vagy **🔑 Token Megadása** gombot.`)], ephemeral: true });
     }
     const lines = tokens.map(t => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
     return ix.reply({ embeds: [ok('Elmentett Fiókjaid', lines.join('\n'))], ephemeral: true });
@@ -393,6 +416,40 @@ export async function handlePanelButton(ix) {
       embeds: [removed ? ok('Kijelentkezve', `${E.check()} A fiókod sikeresen törölve lett az adatbázisból.`) : warn('Nincs Fiók', 'Nem volt elmentett fiókod az adatbázisban.')],
       ephemeral: true,
     });
+  }
+}
+
+export async function handlePanelModal(ix) {
+  if (ix.customId === 'modal_token_input') {
+    await ix.deferReply({ ephemeral: true });
+    const token = ix.fields.getTextInputValue('input_user_token').trim().replace(/["']/g, '');
+    const uid = ix.user.id;
+
+    try {
+      const api = new DiscordUserAPI(token);
+      const user = await api.getCurrentUser();
+      saveToken(uid, 'main', token, { id: user.id, username: user.global_name || user.username });
+
+      let questCountText = '';
+      try {
+        const quests = await fetchParsed(token);
+        const active = quests.filter(q => !q.completed).length;
+        questCountText = `\n${E.radar()} **${active}** aktív küldetés azonnal elérhető.`;
+      } catch {}
+
+      return ix.editReply({
+        embeds: [ok('Sikeres Bejelentkezés!', [
+          `${E.check()} **${user.global_name || user.username}** fiók elmentve (\`main\`)!`,
+          questCountText,
+          '',
+          `🚀 Most már elindíthatod a **⚡ Turbo Start** vagy **🚀 Minden Quest** gombbal!`,
+        ].filter(Boolean).join('\n'))],
+      });
+    } catch (err) {
+      return ix.editReply({
+        embeds: [err('Érvénytelen Token', `${E.cross()} Nem sikerült a felhasználói adatokat lekérni a megadott tokenből: ${err.message}`)],
+      });
+    }
   }
 }
 

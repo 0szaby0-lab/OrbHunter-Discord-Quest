@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Events, ActivityType, REST } from 'discord.js';
 import { config } from './config.js';
-import { commands, handlers, handlePanelButton } from './commands/index.js';
+import { commands, handlers, handlePanelButton, handlePanelModal } from './commands/index.js';
 import { syncSingleGuild } from './register-commands.js';
 import { err } from './utils/embeds.js';
 
@@ -22,6 +22,18 @@ export function createBot(rest = null) {
   });
 
   client.on(Events.InteractionCreate, async (ix) => {
+    if (ix.isModalSubmit()) {
+      try {
+        await handlePanelModal(ix);
+      } catch (e) {
+        console.error(`[Modal:${ix.customId}]`, e);
+        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a felugró űrlap feldolgozásakor.')], ephemeral: true };
+        if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
+        else await ix.reply(payload).catch(() => {});
+      }
+      return;
+    }
+
     if (ix.isButton()) {
       try {
         await handlePanelButton(ix);

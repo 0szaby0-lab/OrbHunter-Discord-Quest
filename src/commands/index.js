@@ -20,4 +20,4 @@ for (const mod of [token, quests, settings, help, panel]) {
   }
 }
 
-export { handlePanelButton } from './panel.js';
+export { handlePanelButton, handlePanelModal } from './panel.js';
