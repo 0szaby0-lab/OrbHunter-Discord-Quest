@@ -1,13 +1,54 @@
 import { EventEmitter } from 'events';
 import crypto from 'crypto';
+import https from 'https';
 import WebSocket from 'ws';
 import QRCode from 'qrcode';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { ProxyAgent } from 'undici';
 
 const GATEWAY_URL = 'wss://remote-auth-gateway.discord.gg/?v=2';
 const API_LOGIN_URL = 'https://discord.com/api/v9/users/@me/remote-auth/login';
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9200 Chrome/134.0.6998.205 Electron/35.7.5 Safari/537.36';
+
+function sendPostJson(urlStr, data, proxyUrl) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const body = JSON.stringify(data);
+    const options = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': DESKTOP_UA,
+        Origin: 'https://discord.com',
+      },
+    };
+
+    if (proxyUrl) {
+      try {
+        options.agent = new HttpsProxyAgent(proxyUrl);
+      } catch (err) {
+        console.warn(`[RemoteAuth] Failed to configure HttpsProxyAgent for login: ${err.message}`);
+      }
+    }
+
+    const req = https.request(url, options, (res) => {
+      let chunks = '';
+      res.on('data', (c) => (chunks += c));
+      res.on('end', () => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          text: async () => chunks,
+          json: async () => JSON.parse(chunks),
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 export class RemoteAuthSession extends EventEmitter {
   constructor(options = {}) {
@@ -162,26 +203,11 @@ export class RemoteAuthSession extends EventEmitter {
           throw new Error('Ticket missing in pending_login packet');
         }
 
-        const fetchOptions = {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': DESKTOP_UA,
-            Origin: 'https://discord.com',
-          },
-          body: JSON.stringify({ ticket }),
-        };
-
         if (this.proxyUrl) {
-          try {
-            fetchOptions.dispatcher = new ProxyAgent(this.proxyUrl);
-            console.log(`[RemoteAuth] Routing ticket exchange through proxy: ${this.proxyUrl}`);
-          } catch (err) {
-            console.warn(`[RemoteAuth] Failed to configure ProxyAgent for login: ${err.message}`);
-          }
+          console.log(`[RemoteAuth] Routing ticket exchange through proxy: ${this.proxyUrl}`);
         }
 
-        const res = await fetch(API_LOGIN_URL, fetchOptions);
+        const res = await sendPostJson(API_LOGIN_URL, { ticket }, this.proxyUrl);
 
         if (!res.ok) {
           const errText = await res.text();
