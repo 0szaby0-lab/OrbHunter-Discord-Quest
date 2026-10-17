@@ -124,26 +124,13 @@ export class ProxyManager {
   }
 
   async getLoginProxy() {
-    // 1. Check for manual/dedicated environment proxy first (100% reliable)
+    // Only use proxy if explicitly provided in environment
     const configured = this.getConfiguredProxy();
     if (configured) {
       return configured;
     }
-
-    // 2. Clean up stale proxies (older than 15 minutes)
-    const now = Date.now();
-    if (now - this.lastHarvestTime > 15 * 60 * 1000) {
-      this.workingProxies = [];
-    }
-
-    // 3. Return best cached proxy if available
-    if (this.workingProxies.length > 0) {
-      return this.workingProxies[0].url;
-    }
-
-    // 4. Try quick hunt
-    await this.harvestAndFind(30);
-    return this.workingProxies[0]?.url || null;
+    // Direct connection without proxy
+    return null;
   }
 }
 

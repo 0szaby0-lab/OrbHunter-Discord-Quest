@@ -80,9 +80,13 @@ function sendPostJson(urlStr, data, proxyUrl, extraHeaders = {}) {
       let chunks = '';
       res.on('data', (c) => (chunks += c));
       res.on('end', () => {
+        const rawCookies = res.headers['set-cookie'] || [];
+        const cookies = rawCookies.map(c => c.split(';')[0]).join('; ');
         resolve({
           ok: res.statusCode >= 200 && res.statusCode < 300,
           status: res.statusCode,
+          headers: res.headers,
+          cookies,
           text: async () => chunks,
           json: async () => JSON.parse(chunks),
         });
@@ -279,6 +283,9 @@ export class RemoteAuthSession extends EventEmitter {
                 if (json.captcha_session_id) {
                   retryHeaders['X-Captcha-Session-Id'] = json.captcha_session_id;
                 }
+                if (res.cookies) {
+                  retryHeaders['Cookie'] = res.cookies;
+                }
 
                 const retryBody = {
                   ticket,
@@ -292,13 +299,7 @@ export class RemoteAuthSession extends EventEmitter {
                 }
 
                 console.log('[RemoteAuth] Sending captcha headers:', Object.keys(retryHeaders));
-                let retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
-
-                // If proxy failed, retry directly without proxy
-                if (!retryRes.ok && this.proxyUrl) {
-                  console.warn(`[RemoteAuth] Proxy retry failed (${retryRes.status}), attempting direct server retry...`);
-                  retryRes = await sendPostJson(API_LOGIN_URL, retryBody, null, retryHeaders);
-                }
+                const retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
 
                 if (!retryRes.ok) {
                   const retryErr = await retryRes.text();
