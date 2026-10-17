@@ -46,15 +46,29 @@ async function main() {
   const browser = await chromium.launchPersistentContext(userDataDir, {
     executablePath: browserPath,
     headless: false,
-    viewport: { width: 950, height: 720 },
+    viewport: null,
+    ignoreDefaultArgs: ['--enable-automation', '--no-sandbox'],
     args: [
       '--app=https://discord.com/login',
       '--window-size=950,720',
       '--disable-blink-features=AutomationControlled',
+      '--no-default-browser-check',
+      '--no-first-run',
     ],
   });
 
   const page = browser.pages()[0] || await browser.newPage();
+
+  // Stealth: remove webdriver and automation flags so Cloudflare / hCaptcha accepts human clicks
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = window.chrome || {
+      runtime: {},
+      loadTimes: function() {},
+      csi: function() {},
+      app: {},
+    };
+  });
 
   let resolvedToken = null;
 
