@@ -1,244 +1,160 @@
 import 'dotenv/config';
-import http from 'http';
-import os from 'os';
-import QRCode from 'qrcode';
-import { writeFileSync, unlinkSync } from 'fs';
-import { exec } from 'child_process';
+import fs from 'fs';
 import path from 'path';
-import { RemoteAuthSession } from '../src/engine/remote-auth.js';
+import { chromium } from 'playwright-core';
 import { DiscordUserAPI } from '../src/engine/discord-api.js';
 import { saveToken } from '../src/database/sqlite.js';
 import { config } from '../src/config.js';
 
 const RENDER_BASE_URL = process.env.RENDER_EXTERNAL_URL || 'https://orbhunter-discord-quest.onrender.com';
 
-console.clear();
-console.log('==============================================================');
-console.log('       OrbHunter — Helyi Biztonságos QR-kód Bejelentkezés    ');
-console.log('==============================================================\n');
-console.log('⏳ Kapcsolódás a Discord hivatalos átjárójához a saját netedről...\n');
-
-let activeQrImagePath = null;
-const session = new RemoteAuthSession({ proxyUrl: null });
-
-session.on('qr', async ({ url, buffer }) => {
-  const qrImagePath = path.join(os.tmpdir(), `discord-qr-${Date.now()}.png`);
-  activeQrImagePath = qrImagePath;
-  try {
-    writeFileSync(qrImagePath, buffer);
-    if (process.platform === 'win32') {
-      exec(`start "" "${qrImagePath}"`);
-    }
-  } catch (err) {
-    // Nem baj ha a képírás elakad, a terminálban lent azonnal kirajzoljuk
+function getBrowserPath() {
+  const candidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google\\Chrome\\Application\\chrome.exe') : null),
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    (process.env.PROGRAMFILES ? path.join(process.env.PROGRAMFILES, 'Microsoft\\Edge\\Application\\msedge.exe') : null),
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
   }
+  return null;
+}
 
-  // Also print directly in terminal
-  QRCode.toString(url, { type: 'terminal', small: true }, (err, str) => {
-    if (!err && str) {
-      console.log(str);
-    }
-  });
+async function main() {
+  console.clear();
+  console.log('==============================================================');
+  console.log('       OrbHunter — Helyi Biztonságos Discord Bejelentkezés    ');
+  console.log('==============================================================\n');
 
-  console.log('--------------------------------------------------------------');
-  console.log('📱 1. Nyisd meg a Discord mobilappot a telefonodon.');
-  console.log('⚙️  2. Jobb alsó sarok: Profilkép -> "QR-kód beolvasása".');
-  console.log('📷 3. Olvasd be a fenti QR-kódot (vagy a felugrott képet)!');
-  console.log('--------------------------------------------------------------');
-  console.log('⏳ Várakozás a beolvasásra...\n');
-});
-
-session.on('scanned', ({ user }) => {
-  const name = user?.username || 'Fiókod';
-  console.log(`\n👁️  ${name} beolvasta a kódot!`);
-  console.log('👉 Kérlek, koppints a telefonodon a "Bejelentkezés megerősítése" gombra!\n');
-});
-
-session.on('finish', async ({ token }) => {
-  console.log('⚡ Bejelentkezés elfogadva! Adatok feldolgozása...\n');
-
-  try {
-    const api = new DiscordUserAPI(token);
-    const user = await api.getCurrentUser();
-    const username = user.global_name || user.username;
-
-    // Save locally
-    const uid = config.ownerId || user.id;
-    saveToken(uid, 'main', token, { id: user.id, username });
-
-    console.log(`✅ Helyi ellenőrzés sikeres: ${username} (${user.id})`);
-    console.log('☁️  Szinkronizálás a Render felhőszerverre...\n');
-
-    // Sync to Render cloud server
-    const syncRes = await fetch(`${RENDER_BASE_URL}/api/auth/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        secret: config.encryptionKey,
-        uid,
-        label: 'main',
-        token,
-      }),
-    });
-
-    const syncData = await syncRes.json();
-
-    if (!syncRes.ok || !syncData.success) {
-      throw new Error(syncData.error || `HTTP ${syncRes.status}`);
-    }
-
-    console.log('==============================================================');
-    console.log(`🎉 SIKERES CSATLAKOZÁS: ${username}!`);
-    console.log('==============================================================');
-    console.log('✅ A fiókodat a Renderen futó szerver sikeresen elmentette.');
-    console.log('🚀 A botod mostantól 24/7 automatikusan végzi a küldetéseidet a felhőben!');
-    console.log('💻 Ezt a terminál ablakot és a gépedet most már nyugodtan bezárhatod.\n');
-
-    // Clean up temporary qr image
-    if (activeQrImagePath) {
-      try { unlinkSync(activeQrImagePath); } catch {}
-    }
-
-    process.exit(0);
-  } catch (err) {
-    console.error(`❌ Hiba a szinkronizáció során: ${err.message}`);
+  const browserPath = getBrowserPath();
+  if (!browserPath) {
+    console.error('❌ Nem található sem Google Chrome, sem Microsoft Edge a gépeden.');
+    console.error('Kérlek telepítsd a Google Chrome-ot a bejelentkezéshez.');
     process.exit(1);
   }
-});
 
-session.on('captcha_required', async ({ sitekey, rqdata, solve }) => {
-  console.log('🛡️  A Discord egy gyors robotellenőrzést (hCaptcha) kér a fiókodhoz!');
-  console.log('🌐 Megnyitom a böngésződben a jóváhagyó ablakot...\n');
+  console.log('🌐 Megnyitom a hivatalos Discord bejelentkező ablakot...\n');
+  console.log('📱 1. Olvasd be a felugró ablakban megjelenő QR-kódot a telefonoddal (vagy lépj be).');
+  console.log('⚡ 2. A jóváhagyás után ez az ablak azonnal és automatikusan aktiválja a botodat!\n');
+  console.log('⏳ Várakozás a bejelentkezésre...\n');
 
-  const port = 48123;
-  let server = null;
+  const userDataDir = path.join(process.cwd(), '.chromium_profile');
 
-  server = http.createServer(async (req, res) => {
-    if (req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`<!DOCTYPE html>
-<html lang="hu">
-<head>
-  <meta charset="UTF-8">
-  <title>OrbHunter — Discord Hitelesítés</title>
-  <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>
-    body {
-      background: radial-gradient(circle at 50% 20%, #1a1e36 0%, #0b0e14 70%);
-      color: #f2f3f5;
-      font-family: 'Outfit', -apple-system, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      padding: 20px;
-    }
-    .card {
-      background: rgba(22, 27, 34, 0.95);
-      border: 1px solid rgba(88, 101, 242, 0.4);
-      box-shadow: 0 16px 50px rgba(0,0,0,0.8), 0 0 30px rgba(88, 101, 242, 0.3);
-      border-radius: 20px;
-      padding: 36px 32px;
-      text-align: center;
-      max-width: 420px;
-      width: 100%;
-    }
-    h2 { font-size: 22px; margin-bottom: 8px; }
-    p { color: #949ba4; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-    #widget { display: flex; justify-content: center; margin-bottom: 16px; }
-    .status { font-size: 14px; color: #5865f2; font-weight: 600; display: none; }
-  </style>
-</head>
-<body>
-  <div class="card" id="card">
-    <div style="font-size: 40px; margin-bottom: 12px;">🛡️</div>
-    <h2>Discord Ellenőrzés</h2>
-    <p>A Discord megerősítést kér a fiókod belépéséhez.<br>Csak pipáld be az alábbi négyzetet:</p>
-    <div id="widget"></div>
-    <div class="status" id="status">⏳ Ellenőrzés feldolgozása...</div>
-  </div>
-  <script>
-    function renderWidget() {
-      if (!window.hcaptcha) return setTimeout(renderWidget, 150);
-      hcaptcha.render('widget', {
-        sitekey: '${sitekey}',
-        ${rqdata ? `rqdata: ${JSON.stringify(rqdata)},` : ''}
-        callback: function(token) {
-          document.getElementById('status').style.display = 'block';
-          fetch('/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token, userAgent: navigator.userAgent })
-          })
-          .then(function(r) { return r.json(); })
-          .then(function(res) {
-            if (res.success) {
-              document.getElementById('card').innerHTML = '<div style="font-size: 48px; margin-bottom: 12px;">🎉</div><h2 style="color:#57f287;">Sikeres ellenőrzés!</h2><p style="color:#f2f3f5;">A fiókod aktiválva lett. Ezt a lapot most már bezárhatod!</p>';
-              setTimeout(function() { window.close(); }, 2500);
-            } else {
-              alert('Hiba: ' + (res.error || 'Ismeretlen hiba'));
-            }
-          })
-          .catch(function(err) {
-            alert('Hálózati hiba: ' + err.message);
-          });
-        }
+  const browser = await chromium.launchPersistentContext(userDataDir, {
+    executablePath: browserPath,
+    headless: false,
+    viewport: { width: 950, height: 720 },
+    args: [
+      '--app=https://discord.com/login',
+      '--window-size=950,720',
+      '--disable-blink-features=AutomationControlled',
+    ],
+  });
+
+  const page = browser.pages()[0] || await browser.newPage();
+
+  let resolvedToken = null;
+
+  async function handleCapturedToken(token) {
+    if (resolvedToken) return;
+    resolvedToken = token;
+
+    console.log('⚡ Bejelentkezés sikeresen észlelve! Adatok feldolgozása...\n');
+
+    try {
+      await browser.close().catch(() => {});
+    } catch {}
+
+    try {
+      const api = new DiscordUserAPI(token);
+      const user = await api.getCurrentUser();
+      const username = user.global_name || user.username;
+
+      // Save locally
+      const uid = config.ownerId || user.id;
+      saveToken(uid, 'main', token, { id: user.id, username });
+
+      console.log(`✅ Helyi ellenőrzés sikeres: ${username} (${user.id})`);
+      console.log('☁️  Szinkronizálás a Render felhőszerverre...\n');
+
+      // Sync to Render cloud server
+      const syncRes = await fetch(`${RENDER_BASE_URL}/api/auth/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          secret: config.encryptionKey,
+          uid,
+          label: 'main',
+          token,
+        }),
       });
+
+      const syncData = await syncRes.json();
+
+      if (!syncRes.ok || !syncData.success) {
+        throw new Error(syncData.error || `HTTP ${syncRes.status}`);
+      }
+
+      console.log('==============================================================');
+      console.log(`🎉 SIKERES CSATLAKOZÁS: ${username}!`);
+      console.log('==============================================================');
+      console.log('✅ A fiókodat a Renderen futó szerver sikeresen elmentette.');
+      console.log('🚀 A botod mostantól 24/7 automatikusan végzi a küldetéseidet a felhőben!');
+      console.log('💻 Ezt a parancssor ablakot most már nyugodtan bezárhatod.\n');
+
+      process.exit(0);
+    } catch (err) {
+      console.error(`❌ Hiba a szinkronizáció során: ${err.message}`);
+      process.exit(1);
     }
-    renderWidget();
-  </script>
-</body>
-</html>`);
+  }
+
+  // Intercept authorization header from any API request on discord.com
+  page.on('request', async req => {
+    const auth = req.headers()['authorization'];
+    if (auth && !auth.startsWith('Bot ') && auth.length > 40) {
+      await handleCapturedToken(auth);
+    }
+  });
+
+  // Also poll localStorage in case page already authenticated
+  const pollInterval = setInterval(async () => {
+    if (resolvedToken) {
+      clearInterval(pollInterval);
       return;
     }
-
-    if (req.method === 'POST' && req.url === '/submit') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', async () => {
+    try {
+      const token = await page.evaluate(() => {
         try {
-          const { token, userAgent } = JSON.parse(body);
-          console.log('⚡ Captcha jóváhagyás beérkezett, beküldés a Discordnak...');
-          await solve(token, userAgent);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true }));
-          setTimeout(() => {
-            try { server.close(); } catch {}
-          }, 1500);
-        } catch (err) {
-          console.error('❌ Hiba a captcha beküldésekor:', err.message);
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: err.message }));
+          const iframe = document.createElement('iframe');
+          document.body.appendChild(iframe);
+          const t = iframe.contentWindow.localStorage.token;
+          iframe.remove();
+          return t ? t.replace(/"/g, '') : null;
+        } catch {
+          return null;
         }
       });
-      return;
+      if (token && token.length > 40) {
+        clearInterval(pollInterval);
+        await handleCapturedToken(token);
+      }
+    } catch {}
+  }, 1000);
+
+  // If user closes window manually before login
+  browser.on('close', () => {
+    if (!resolvedToken) {
+      console.log('\n❌ A bejelentkező ablakot bezártad a hitelesítés előtt.');
+      process.exit(0);
     }
   });
+}
 
-  server.listen(port, () => {
-    const url = `http://localhost:${port}`;
-    console.log(`🔗 Ha a böngésző nem nyílt meg, kattints ide a jóváhagyáshoz: ${url}\n`);
-    if (process.platform === 'win32') {
-      exec(`start "" "${url}"`);
-    }
-  });
-});
-
-session.on('cancel', () => {
-  console.log('\n❌ A bejelentkezést megszakították a telefonodon.');
+main().catch(err => {
+  console.error('❌ Hiba történt:', err.message);
   process.exit(1);
 });
-
-session.on('timeout', () => {
-  console.log('\n⏳ A QR-kód lejárt. Indítsd újra a programot!');
-  process.exit(1);
-});
-
-session.on('error', (err) => {
-  console.error(`\n❌ Csatlakozási hiba: ${err.message}`);
-  process.exit(1);
-});
-
-session.start();
