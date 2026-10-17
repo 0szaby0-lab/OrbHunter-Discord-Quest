@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import http from 'http';
+import os from 'os';
 import QRCode from 'qrcode';
 import { writeFileSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
@@ -17,15 +18,19 @@ console.log('       OrbHunter — Helyi Biztonságos QR-kód Bejelentkezés    '
 console.log('==============================================================\n');
 console.log('⏳ Kapcsolódás a Discord hivatalos átjárójához a saját netedről...\n');
 
+let activeQrImagePath = null;
 const session = new RemoteAuthSession({ proxyUrl: null });
 
 session.on('qr', async ({ url, buffer }) => {
-  const qrImagePath = path.join(process.cwd(), 'discord-login-qr.png');
-  writeFileSync(qrImagePath, buffer);
-
-  // Auto open image on Windows
-  if (process.platform === 'win32') {
-    exec(`start "" "${qrImagePath}"`);
+  const qrImagePath = path.join(os.tmpdir(), `discord-qr-${Date.now()}.png`);
+  activeQrImagePath = qrImagePath;
+  try {
+    writeFileSync(qrImagePath, buffer);
+    if (process.platform === 'win32') {
+      exec(`start "" "${qrImagePath}"`);
+    }
+  } catch (err) {
+    // Nem baj ha a képírás elakad, a terminálban lent azonnal kirajzoljuk
   }
 
   // Also print directly in terminal
@@ -90,9 +95,9 @@ session.on('finish', async ({ token }) => {
     console.log('💻 Ezt a terminál ablakot és a gépedet most már nyugodtan bezárhatod.\n');
 
     // Clean up temporary qr image
-    try {
-      unlinkSync(path.join(process.cwd(), 'discord-login-qr.png'));
-    } catch {}
+    if (activeQrImagePath) {
+      try { unlinkSync(activeQrImagePath); } catch {}
+    }
 
     process.exit(0);
   } catch (err) {
