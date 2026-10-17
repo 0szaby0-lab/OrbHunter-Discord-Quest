@@ -4,11 +4,15 @@ import { createBot } from './bot.js';
 import { config } from './config.js';
 import { registerCommands, syncGuildCommands } from './register-commands.js';
 import { loadEmojiMap } from './utils/emojis.js';
+import { handleCaptchaRequest } from './server/captcha-relay.js';
 
-// Render.com Web Service HTTP health check
-const PORT = process.env.PORT || null;
-if (PORT) {
-  http.createServer((req, res) => {
+// Render.com Web Service HTTP health check & Captcha Relay
+const PORT = process.env.PORT || 10000;
+http.createServer(async (req, res) => {
+  try {
+    const handled = await handleCaptchaRequest(req, res);
+    if (handled) return;
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'online',
@@ -16,10 +20,13 @@ if (PORT) {
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
     }));
-  }).listen(PORT, () => {
-    console.log(`🌐 Render HTTP health server fut a(z) ${PORT} porton`);
-  });
-}
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}).listen(PORT, () => {
+  console.log(`🌐 Web szerver és Captcha Relay fut a(z) ${PORT} porton`);
+});
 
 loadEmojiMap();
 console.log('Starting…');

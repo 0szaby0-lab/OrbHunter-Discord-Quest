@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getDecryptedToken, getSettings, logQuest } from '../database/sqlite.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { parseAllQuests, filterRunnableQuests } from '../engine/quest-parser.js';
@@ -116,7 +116,7 @@ export const handlers = {
     }
 
     if (sub === 'info') {
-      await ix.deferReply({ ephemeral: true });
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const c = await ctx(ix, label);
       if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
 
@@ -169,18 +169,18 @@ export const handlers = {
       const stopped = abortRun(ix.user.id);
       return ix.reply({
         embeds: [stopped ? warn('Stopped', `${E.cross()} Aborted.`) : ui('Idle', 'Nothing running.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     if (sub === 'status') {
       const state = getRunState(ix.user.id);
-      if (!state) return ix.reply({ embeds: [ui('Idle', `${E.clock()} No active run.`)], ephemeral: true });
-      return ix.reply({ embeds: [statusEmbed(state.engine?.tasks, `${E.bolt()} In progress…`)], ephemeral: true });
+      if (!state) return ix.reply({ embeds: [ui('Idle', `${E.clock()} No active run.`)], flags: MessageFlags.Ephemeral });
+      return ix.reply({ embeds: [statusEmbed(state.engine?.tasks, `${E.bolt()} In progress…`)], flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'claim') {
-      await ix.deferReply({ ephemeral: true });
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const c = await ctx(ix, label);
       if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
 

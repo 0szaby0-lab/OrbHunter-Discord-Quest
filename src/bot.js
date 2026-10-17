@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, ActivityType, REST } from 'discord.js';
+import { Client, GatewayIntentBits, Events, ActivityType, REST, MessageFlags } from 'discord.js';
 import { config } from './config.js';
 import { commands, handlers, handlePanelButton, handlePanelModal } from './commands/index.js';
 import { syncSingleGuild } from './register-commands.js';
@@ -27,7 +27,7 @@ export function createBot(rest = null) {
         await handlePanelModal(ix);
       } catch (e) {
         console.error(`[Modal:${ix.customId}]`, e);
-        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a felugró űrlap feldolgozásakor.')], ephemeral: true };
+        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a felugró űrlap feldolgozásakor.')], flags: MessageFlags.Ephemeral };
         if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
         else await ix.reply(payload).catch(() => {});
       }
@@ -39,7 +39,7 @@ export function createBot(rest = null) {
         await handlePanelButton(ix);
       } catch (e) {
         console.error(`[Button:${ix.customId}]`, e);
-        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a gomb megnyomásakor.')], ephemeral: true };
+        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a gomb megnyomásakor.')], flags: MessageFlags.Ephemeral };
         if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
         else await ix.reply(payload).catch(() => {});
       }
@@ -54,7 +54,7 @@ export function createBot(rest = null) {
       await handler(ix);
     } catch (e) {
       console.error(`[${ix.commandName}]`, e);
-      const payload = { embeds: [err('Error', e.message || 'Something went wrong.')], ephemeral: true };
+      const payload = { embeds: [err('Error', e.message || 'Something went wrong.')], flags: MessageFlags.Ephemeral };
       if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
       else await ix.reply(payload).catch(() => {});
     }

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
 import { ok, warn, err, E, questListEmbed, statusEmbed, helpEmbed } from '../utils/embeds.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
@@ -189,39 +189,39 @@ export async function handlePanelButton(ix) {
 
   // --- SOR 1: Küldetés Futtatás ---
   if (id === 'btn_turbo' || id === 'panel_turbo') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     return runMode(ix, { turbo: true });
   }
 
   if (id === 'btn_all' || id === 'panel_all') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     return runMode(ix, {});
   }
 
   if (id === 'btn_run') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     return runMode(ix, { sequential: true });
   }
 
   if (id === 'btn_status' || id === 'panel_status') {
     const state = getRunState(uid);
     if (!state) {
-      return ix.reply({ embeds: [ui('Nyugvó Állapot', `${E.clock()} Jelenleg nincs aktív küldetésfutás a fiókodon.`)], ephemeral: true });
+      return ix.reply({ embeds: [ui('Nyugvó Állapot', `${E.clock()} Jelenleg nincs aktív küldetésfutás a fiókodon.`)], flags: MessageFlags.Ephemeral });
     }
-    return ix.reply({ embeds: [statusEmbed(state.engine?.tasks, `${E.bolt()} Küldetések folyamatban…`)], ephemeral: true });
+    return ix.reply({ embeds: [statusEmbed(state.engine?.tasks, `${E.bolt()} Küldetések folyamatban…`)], flags: MessageFlags.Ephemeral });
   }
 
   if (id === 'btn_stop' || id === 'panel_stop') {
     const stopped = abortRun(uid);
     return ix.reply({
       embeds: [stopped ? warn('Megállítva', `${E.cross()} A küldetésfutás sikeresen megszakítva a fiókodon.`) : ui('Nincs Futás', `${E.clock()} Nem futott aktív folyamat a fiókodon.`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
   // --- SOR 2: Kezelés & Jutalmak ---
   if (id === 'btn_list' || id === 'panel_list') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const c = await ctx(ix, 'main');
     if (c.error) {
       return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a **📱 QR Belépés** gombra.`)] });
@@ -235,7 +235,7 @@ export async function handlePanelButton(ix) {
   }
 
   if (id === 'btn_accept') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const c = await ctx(ix, 'main');
     if (c.error) {
       return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a **📱 QR Belépés** gombra.`)] });
@@ -265,7 +265,7 @@ export async function handlePanelButton(ix) {
   }
 
   if (id === 'btn_claim' || id === 'panel_claim') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const c = await ctx(ix, 'main');
     if (c.error) {
       return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Használd a **📱 QR Belépés** gombot előbb.`)] });
@@ -316,7 +316,7 @@ export async function handlePanelButton(ix) {
     const statusText = next ? `${E.check()} **BEKAPCSOLVA**` : `${E.cross()} **KIKAPCSOLVA**`;
     return ix.reply({
       embeds: [ok('Turbo Mód Váltva', `${E.rocket()} A fiókod alapértelmezett Turbo módja mostantól: ${statusText}`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -327,7 +327,7 @@ export async function handlePanelButton(ix) {
     const statusText = next ? `${E.check()} **BEKAPCSOLVA**` : `${E.cross()} **KIKAPCSOLVA**`;
     return ix.reply({
       embeds: [ok('Auto-Claim Váltva', `${E.loot()} Az automatikus jutalomátvétel a fiókodon: ${statusText}`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -338,7 +338,7 @@ export async function handlePanelButton(ix) {
     const statusText = next ? `${E.check()} **BEKAPCSOLVA**` : `${E.cross()} **KIKAPCSOLVA**`;
     return ix.reply({
       embeds: [ok('Auto-Enroll Váltva', `${E.spark()} Az automatikus küldetéselfogadás a fiókodon: ${statusText}`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -351,7 +351,7 @@ export async function handlePanelButton(ix) {
         `${E.loot()} Auto-claim jutalmak: **${on(s.auto_claim)}**`,
         `${E.spark()} Auto-enroll küldetések: **${on(s.auto_enroll)}**`,
       ].join('\n'))],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -361,7 +361,7 @@ export async function handlePanelButton(ix) {
   }
 
   if (id === 'btn_check' || id === 'panel_check') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const token = getDecryptedToken(uid, 'main') || getDecryptedToken(uid, 'default');
     if (!token) {
       return ix.editReply({ embeds: [warn('Nincs Fiók Mentve', `${E.key()} Még nem mentettél el fiókot. Használd a **📱 QR Belépés** gombot.`)] });
@@ -404,24 +404,24 @@ export async function handlePanelButton(ix) {
   if (id === 'btn_token_list') {
     const tokens = listTokens(uid);
     if (!tokens.length) {
-      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** vagy **🔑 Token Megadása** gombot.`)], ephemeral: true });
+      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** vagy **🔑 Token Megadása** gombot.`)], flags: MessageFlags.Ephemeral });
     }
     const lines = tokens.map(t => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
-    return ix.reply({ embeds: [ok('Elmentett Fiókjaid', lines.join('\n'))], ephemeral: true });
+    return ix.reply({ embeds: [ok('Elmentett Fiókjaid', lines.join('\n'))], flags: MessageFlags.Ephemeral });
   }
 
   if (id === 'btn_token_remove') {
     const removed = removeToken(uid, 'main');
     return ix.reply({
       embeds: [removed ? ok('Kijelentkezve', `${E.check()} A fiókod sikeresen törölve lett az adatbázisból.`) : warn('Nincs Fiók', 'Nem volt elmentett fiókod az adatbázisban.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }
 
 export async function handlePanelModal(ix) {
   if (ix.customId === 'modal_token_input') {
-    await ix.deferReply({ ephemeral: true });
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const token = ix.fields.getTextInputValue('input_user_token').trim().replace(/["']/g, '');
     const uid = ix.user.id;
 
@@ -458,7 +458,7 @@ export const handlers = {
     if (ix.user.id !== OWNER_ID) {
       return ix.reply({
         embeds: [err('Hozzáférés Megtagadva', `${E.cross()} A vezérlőpult kirakását kizárólag a bot tulajdonosa (<@${OWNER_ID}>) végezheti el.\n\n*A már kirakott panel gombjait viszont bármelyik tag használhatja a saját fiókjának vezérlésére!*`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
     return ix.reply(buildPanelMessage());

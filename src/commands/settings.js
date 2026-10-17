@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getSettings, saveSettings } from '../database/sqlite.js';
 import { ok, ui, E } from '../utils/embeds.js';
 
@@ -30,7 +30,7 @@ export const handlers = {
           `${E.loot()} auto-claim · **${on(s.auto_claim)}**`,
           `${E.spark()} auto-enroll · **${on(s.auto_enroll)}**`,
         ].join('\n'))],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -38,6 +38,6 @@ export const handlers = {
     const key = sub === 'turbo' ? 'turbo_mode' : sub === 'claim' ? 'auto_claim' : 'auto_enroll';
     saveSettings(uid, { [key]: enabled ? 1 : 0 });
 
-    return ix.reply({ embeds: [ok('Updated', `${sub}: **${on(enabled)}**`)], ephemeral: true });
+    return ix.reply({ embeds: [ok('Updated', `${sub}: **${on(enabled)}**`)], flags: MessageFlags.Ephemeral });
   },
 };

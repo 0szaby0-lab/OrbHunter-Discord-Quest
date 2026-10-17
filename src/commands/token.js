@@ -1,7 +1,8 @@
-import { SlashCommandBuilder, AttachmentBuilder } from 'discord.js';
+import { SlashCommandBuilder, AttachmentBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { RemoteAuthSession } from '../engine/remote-auth.js';
 import { proxyManager } from '../engine/proxy-manager.js';
+import { createCaptchaSession, getPublicBaseUrl } from '../server/captcha-relay.js';
 import { saveToken, getDecryptedToken, removeToken, listTokens } from '../database/sqlite.js';
 import { ok, warn, err, ui, E } from '../utils/embeds.js';
 import { maskToken } from '../utils/crypto.js';
@@ -30,7 +31,7 @@ export const commands = [
 ];
 
 export async function handleQrLogin(ix, label = 'main') {
-  await ix.deferReply({ ephemeral: true });
+  await ix.deferReply({ flags: MessageFlags.Ephemeral });
   const uid = ix.user.id;
 
   const proxyUrl = await proxyManager.getLoginProxy();
@@ -53,6 +54,7 @@ export async function handleQrLogin(ix, label = 'main') {
     await ix.editReply({
       embeds: [embed],
       files: [attachment],
+      components: [],
     }).catch(() => {});
   });
 
@@ -66,6 +68,50 @@ export async function handleQrLogin(ix, label = 'main') {
 
     await ix.editReply({
       embeds: [embed],
+      files: [],
+      components: [],
+    }).catch(() => {});
+  });
+
+  session.on('captcha_required', async ({ sitekey, rqdata, rqtoken, solve }) => {
+    const sessionId = createCaptchaSession({
+      sitekey,
+      rqdata,
+      rqtoken,
+      onSolved: async (captchaToken) => {
+        try {
+          await solve(captchaToken);
+        } catch (e) {
+          await ix.editReply({
+            embeds: [err('Hiba a jóváhagyáskor', `${E.cross()} ${e.message}`)],
+            components: [],
+            files: [],
+          }).catch(() => {});
+        }
+      },
+    });
+
+    const solveUrl = `${getPublicBaseUrl()}/captcha/${sessionId}`;
+
+    const buttonRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('🧩 Captcha Feloldása (Kattints ide)')
+        .setStyle(ButtonStyle.Link)
+        .setURL(solveUrl)
+    );
+
+    const embed = ui('Discord Biztonsági Ellenőrzés (hCaptcha)', [
+      `${E.warn()} **A Discord felhős IP-ről biztonsági ellenőrzést kér.**`,
+      '',
+      '👉 **Kattints az alábbi gombra, és pipáld ki a captchát a böngésződben (1 kattintás)!**',
+      '✅ Amint a böngészőben feloldottad, a bot azonnal befejezi a bejelentkezést és elmenti a fiókodat.',
+      '',
+      `⏳ *A link 5 percig érvényes.*`,
+    ].join('\n'), '#f0b232');
+
+    await ix.editReply({
+      embeds: [embed],
+      components: [buttonRow],
       files: [],
     }).catch(() => {});
   });
@@ -95,11 +141,13 @@ export async function handleQrLogin(ix, label = 'main') {
       await ix.editReply({
         embeds: [embed],
         files: [],
+        components: [],
       }).catch(() => {});
     } catch (err) {
       await ix.editReply({
         embeds: [err('Hiba a jóváhagyáskor', `${E.cross()} Nem sikerült a felhasználói adatokat lekérni: ${err.message}`)],
         files: [],
+        components: [],
       }).catch(() => {});
     }
   });
@@ -108,6 +156,7 @@ export async function handleQrLogin(ix, label = 'main') {
     await ix.editReply({
       embeds: [warn('Megszakítva', `${E.cross()} A bejelentkezést megszakították a telefonon vagy lejárt a munkamenet.`)],
       files: [],
+      components: [],
     }).catch(() => {});
   });
 
@@ -115,6 +164,7 @@ export async function handleQrLogin(ix, label = 'main') {
     await ix.editReply({
       embeds: [warn('Lejárt a munkamenet', `${E.clock()} A QR-kód érvényessége lejárt. Újraindításhoz futtasd a \`/login\` parancsot.`)],
       files: [],
+      components: [],
     }).catch(() => {});
   });
 
@@ -122,21 +172,20 @@ export async function handleQrLogin(ix, label = 'main') {
     console.error('Remote auth error:', error.message);
     const isCaptcha = error.message && error.message.includes('captcha-required');
     const title = isCaptcha ? 'Discord Felhős Védelem (Captcha)' : 'Csatlakozási hiba';
-    const proxyStatus = proxyUrl ? `🛡️ *Használt login proxy:* \`${proxyUrl}\` (Discord által blokkolva)` : '🌐 *Közvetlen Render IP használatban*';
+    const proxyStatus = proxyUrl ? `🛡️ *Használt login proxy:* \`${proxyUrl}\`` : '🌐 *Közvetlen Render IP használatban*';
     const desc = isCaptcha
       ? [
           `${E.warn()} **A Discord felhős IP-ről captchát kért a QR-kódhoz.**`,
           proxyStatus,
           '',
-          `👉 **Azonnali megoldás:** Nyomd meg a **🔑 Token Megadása** gombot a panelen vagy futtasd a \`/token add\` parancsot! A token megadása után a küldetések automatizálása 100%-ban lefut a szerver saját IP-jéről captcha nélkül.`,
-          '',
-          `💡 *Tipp:* Ha Renderen is QR-kódot szeretnél, állíts be egy megbízható lakossági/ingyenes proxyt a Render Environmentben (\`LOGIN_PROXY=http://...\`).`,
+          `👉 **Azonnali megoldás:** Nyomd meg a **🔑 Token Megadása** gombot a panelen vagy futtasd a \`/token add\` parancsot!`,
         ].join('\n')
-      : `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához (${error.message}). Használd a **🔑 Token Megadása** gombot!`;
+      : `${E.cross()} Nem sikerült kapcsolódni a Discord Remote Auth átjárójához (${error.message}).`;
 
     await ix.editReply({
       embeds: [err(title, desc)],
       files: [],
+      components: [],
     }).catch(() => {});
   });
 
@@ -159,7 +208,7 @@ export const handlers = {
     }
 
     if (sub === 'add') {
-      await ix.deferReply({ ephemeral: true });
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const token = ix.options.getString('token');
       const label = ix.options.getString('label') || 'main';
       try {
@@ -177,12 +226,12 @@ export const handlers = {
       const removed = removeToken(uid, label);
       return ix.reply({
         embeds: [removed ? ok('Removed', `${E.check()} \`${label}\``) : warn('Not found', `\`${label}\``)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     if (sub === 'check') {
-      await ix.deferReply({ ephemeral: true });
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const label = ix.options.getString('label') || 'main';
       const token = getDecryptedToken(uid, label) || getDecryptedToken(uid, 'default');
       if (!token) return ix.editReply({ embeds: [warn('Missing', `${E.key()} \`/login\` vagy \`/token add\``)] });
@@ -206,9 +255,9 @@ export const handlers = {
 
     if (sub === 'list') {
       const tokens = listTokens(uid);
-      if (!tokens.length) return ix.reply({ embeds: [warn('Empty', `${E.key()} \`/login\` vagy \`/token add\``)], ephemeral: true });
+      if (!tokens.length) return ix.reply({ embeds: [warn('Empty', `${E.key()} \`/login\` vagy \`/token add\``)], flags: MessageFlags.Ephemeral });
       const lines = tokens.map((t, i) => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
-      return ix.reply({ embeds: [ok('Tokens', lines.join('\n'))], ephemeral: true });
+      return ix.reply({ embeds: [ok('Tokens', lines.join('\n'))], flags: MessageFlags.Ephemeral });
     }
   },
 };
