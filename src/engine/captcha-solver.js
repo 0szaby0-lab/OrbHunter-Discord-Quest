@@ -1,179 +1,145 @@
-// language: JavaScript, file: captcha-solver.js, target: Node.js 18+
-// CapSolver / 2Captcha integration for hCaptcha Enterprise (Discord)
+// language: JavaScript, file: src/engine/captcha-solver.js, runtime: Node.js 18+
+// Automated hCaptcha Enterprise solver integration for CapSolver, 2Captcha, Anti-Captcha
 
-const CAPSOLVER_API = 'https://api.capsolver.com';
-const TWOCAPTCHA_API = 'https://api.2captcha.com';
-
-const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_ATTEMPTS = 40; // ~2 min max wait
-
-function getApiKey() {
-  return process.env.CAPSOLVER_API_KEY || process.env.TWOCAPTCHA_API_KEY || null;
-}
-
-function getProvider() {
-  if (process.env.CAPSOLVER_API_KEY) return 'capsolver';
-  if (process.env.TWOCAPTCHA_API_KEY) return 'twocaptcha';
-  return null;
-}
-
-export function hasCaptchaSolver() {
-  return !!getApiKey();
-}
-
-/**
- * Solve an hCaptcha Enterprise challenge via CapSolver or 2Captcha.
- *
- * @param {object} params
- * @param {string} params.sitekey - hCaptcha sitekey from Discord's 400 response
- * @param {string} params.rqdata  - Enterprise rqdata blob from Discord
- * @param {string} [params.pageUrl] - The page URL context (default: https://discord.com)
- * @param {string} [params.userAgent] - User agent to pass to the solver
- * @returns {Promise<string>} Solved captcha token (h-captcha-response)
- */
-export async function solveCaptcha({ sitekey, rqdata, pageUrl, userAgent }) {
-  const provider = getProvider();
-  const apiKey = getApiKey();
-
-  if (!provider || !apiKey) {
-    throw new Error('Nincs captcha solver konfigurálva. Állítsd be a CAPSOLVER_API_KEY vagy TWOCAPTCHA_API_KEY env változót.');
+export class CaptchaSolver {
+  constructor() {
+    this.capsolverKey = process.env.CAPSOLVER_API_KEY || null;
+    this.twoCaptchaKey = process.env.TWOCAPTCHA_API_KEY || null;
+    this.antiCaptchaKey = process.env.ANTICAPTCHA_API_KEY || null;
   }
 
-  console.log(`[CaptchaSolver] 🧩 Solving hCaptcha Enterprise via ${provider}...`);
-
-  if (provider === 'capsolver') {
-    return solveViaCapsolver({ apiKey, sitekey, rqdata, pageUrl, userAgent });
-  }
-  return solveViaTwoCaptcha({ apiKey, sitekey, rqdata, pageUrl, userAgent });
-}
-
-async function solveViaCapsolver({ apiKey, sitekey, rqdata, pageUrl, userAgent }) {
-  const createRes = await fetch(`${CAPSOLVER_API}/createTask`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      clientKey: apiKey,
-      task: {
-        type: 'HCaptchaTaskProxyless',
-        websiteURL: pageUrl || 'https://discord.com',
-        websiteKey: sitekey,
-        isEnterprise: true,
-        enterprisePayload: {
-          rqdata: rqdata || '',
-        },
-        userAgent: userAgent || undefined,
-      },
-    }),
-  });
-
-  const createData = await createRes.json();
-
-  if (createData.errorId && createData.errorId !== 0) {
-    throw new Error(`CapSolver task létrehozás sikertelen: ${createData.errorDescription || JSON.stringify(createData)}`);
+  isConfigured() {
+    return !!(this.capsolverKey || this.twoCaptchaKey || this.antiCaptchaKey);
   }
 
-  const taskId = createData.taskId;
-  if (!taskId) {
-    throw new Error(`CapSolver nem adott task ID-t: ${JSON.stringify(createData)}`);
+  async solve({ sitekey, rqdata, rqtoken, websiteUrl = 'https://discord.com' }) {
+    if (this.capsolverKey) {
+      return this.solveWithCapSolver({ sitekey, rqdata, rqtoken, websiteUrl });
+    }
+    if (this.twoCaptchaKey) {
+      return this.solveWith2Captcha({ sitekey, rqdata, websiteUrl });
+    }
+    if (this.antiCaptchaKey) {
+      return this.solveWithAntiCaptcha({ sitekey, rqdata, websiteUrl });
+    }
+    throw new Error('Nincs beállítva captcha-megoldó API kulcs (.env: CAPSOLVER_API_KEY).');
   }
 
-  console.log(`[CaptchaSolver] ⏳ Task created: ${taskId}, polling...`);
-
-  for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    await sleep(POLL_INTERVAL_MS);
-
-    const pollRes = await fetch(`${CAPSOLVER_API}/getTaskResult`, {
+  async solveWithCapSolver({ sitekey, rqdata, rqtoken, websiteUrl }) {
+    console.log('[CaptchaSolver] CapSolver feladat indítása...');
+    const createRes = await fetch('https://api.capsolver.com/createTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        clientKey: apiKey,
-        taskId,
+        clientKey: this.capsolverKey,
+        task: {
+          type: 'HCaptchaEnterpriseTaskProxyLess',
+          websiteURL: websiteUrl,
+          websiteKey: sitekey,
+          enterprisePayload: rqdata ? { rqdata } : undefined,
+        },
       }),
     });
 
-    const pollData = await pollRes.json();
+    const createData = await createRes.json();
+    if (createData.errorId && createData.errorId !== 0) {
+      throw new Error(`CapSolver createTask hiba: ${createData.errorDescription || createData.errorCode}`);
+    }
 
-    if (pollData.status === 'ready') {
-      const token = pollData.solution?.gRecaptchaResponse;
-      if (!token) {
-        throw new Error('CapSolver kész, de nincs token a válaszban.');
+    const taskId = createData.taskId;
+    if (!taskId) throw new Error('Nem érkezett taskId a CapSolvertől.');
+
+    // Poll for solution (up to 45 seconds)
+    const startTime = Date.now();
+    while (Date.now() - startTime < 45000) {
+      await new Promise(r => setTimeout(r, 2000));
+      const resultRes = await fetch('https://api.capsolver.com/getTaskResult', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientKey: this.capsolverKey, taskId }),
+      });
+      const resultData = await resultRes.json();
+
+      if (resultData.status === 'ready') {
+        const token = resultData.solution?.gRecaptchaResponse || resultData.solution?.token;
+        if (!token) throw new Error('CapSolver ready, de hiányzik a megoldás-token.');
+        console.log('[CaptchaSolver] ✅ CapSolver hCaptcha sikeresen megoldva!');
+        return token;
       }
-      console.log(`[CaptchaSolver] ✅ Solved in ${(i + 1) * 3}s`);
-      return token;
+
+      if (resultData.status === 'failed' || (resultData.errorId && resultData.errorId !== 0)) {
+        throw new Error(`CapSolver feloldás sikertelen: ${resultData.errorDescription || 'Ismeretlen hiba'}`);
+      }
     }
 
-    if (pollData.status === 'failed' || (pollData.errorId && pollData.errorId !== 0)) {
-      throw new Error(`CapSolver megoldás sikertelen: ${pollData.errorDescription || JSON.stringify(pollData)}`);
+    throw new Error('CapSolver időtúllépés (timeout 45s).');
+  }
+
+  async solveWith2Captcha({ sitekey, rqdata, websiteUrl }) {
+    console.log('[CaptchaSolver] 2Captcha feladat indítása...');
+    const params = new URLSearchParams({
+      key: this.twoCaptchaKey,
+      method: 'hcaptcha',
+      sitekey,
+      pageurl: websiteUrl,
+      json: '1',
+    });
+    if (rqdata) params.append('data', rqdata);
+
+    const inRes = await fetch(`https://2captcha.com/in.php?${params.toString()}`);
+    const inData = await inRes.json();
+    if (inData.status !== 1) throw new Error(`2Captcha hiba: ${inData.request}`);
+
+    const reqId = inData.request;
+    const startTime = Date.now();
+    while (Date.now() - startTime < 50000) {
+      await new Promise(r => setTimeout(r, 4000));
+      const res = await fetch(`https://2captcha.com/res.php?key=${this.twoCaptchaKey}&action=get&id=${reqId}&json=1`);
+      const resData = await res.json();
+      if (resData.status === 1) {
+        console.log('[CaptchaSolver] ✅ 2Captcha hCaptcha sikeresen megoldva!');
+        return resData.request;
+      }
+      if (resData.request !== 'CAPCHA_NOT_READY') {
+        throw new Error(`2Captcha hiba: ${resData.request}`);
+      }
     }
+    throw new Error('2Captcha időtúllépés (timeout 50s).');
   }
 
-  throw new Error('CapSolver timeout: nem sikerült megoldani a captchát időben.');
-}
-
-async function solveViaTwoCaptcha({ apiKey, sitekey, rqdata, pageUrl, userAgent }) {
-  // 2Captcha API — create task
-  const createRes = await fetch(`${TWOCAPTCHA_API}/createTask`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      clientKey: apiKey,
-      task: {
-        type: 'HCaptchaTaskProxyless',
-        websiteURL: pageUrl || 'https://discord.com',
-        websiteKey: sitekey,
-        isEnterprise: true,
-        enterprisePayload: {
-          rqdata: rqdata || '',
-        },
-        userAgent: userAgent || undefined,
-      },
-    }),
-  });
-
-  const createData = await createRes.json();
-
-  if (createData.errorId && createData.errorId !== 0) {
-    throw new Error(`2Captcha task létrehozás sikertelen: ${createData.errorDescription || JSON.stringify(createData)}`);
-  }
-
-  const taskId = createData.taskId;
-  if (!taskId) {
-    throw new Error(`2Captcha nem adott task ID-t: ${JSON.stringify(createData)}`);
-  }
-
-  console.log(`[CaptchaSolver] ⏳ Task created: ${taskId}, polling...`);
-
-  for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-    await sleep(POLL_INTERVAL_MS);
-
-    const pollRes = await fetch(`${TWOCAPTCHA_API}/getTaskResult`, {
+  async solveWithAntiCaptcha({ sitekey, rqdata, websiteUrl }) {
+    console.log('[CaptchaSolver] Anti-Captcha feladat indítása...');
+    const createRes = await fetch('https://api.anti-captcha.com/createTask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        clientKey: apiKey,
-        taskId,
+        clientKey: this.antiCaptchaKey,
+        task: {
+          type: 'HCaptchaEnterpriseTaskProxyLess',
+          websiteURL: websiteUrl,
+          websiteKey: sitekey,
+          enterprisePayload: rqdata ? { rqdata } : undefined,
+        },
       }),
     });
+    const createData = await createRes.json();
+    if (createData.errorId !== 0) throw new Error(`Anti-Captcha hiba: ${createData.errorDescription}`);
 
-    const pollData = await pollRes.json();
-
-    if (pollData.status === 'ready') {
-      const token = pollData.solution?.gRecaptchaResponse || pollData.solution?.token;
-      if (!token) {
-        throw new Error('2Captcha kész, de nincs token a válaszban.');
-      }
-      console.log(`[CaptchaSolver] ✅ Solved in ${(i + 1) * 3}s`);
-      return token;
+    const taskId = createData.taskId;
+    const startTime = Date.now();
+    while (Date.now() - startTime < 45000) {
+      await new Promise(r => setTimeout(r, 3000));
+      const res = await fetch('https://api.anti-captcha.com/getTaskResult', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientKey: this.antiCaptchaKey, taskId }),
+      });
+      const data = await res.json();
+      if (data.status === 'ready') return data.solution.gRecaptchaResponse;
+      if (data.errorId !== 0) throw new Error(`Anti-Captcha hiba: ${data.errorDescription}`);
     }
-
-    if (pollData.status === 'failed' || (pollData.errorId && pollData.errorId !== 0)) {
-      throw new Error(`2Captcha megoldás sikertelen: ${pollData.errorDescription || JSON.stringify(pollData)}`);
-    }
+    throw new Error('Anti-Captcha időtúllépés.');
   }
-
-  throw new Error('2Captcha timeout: nem sikerült megoldani a captchát időben.');
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+export const solver = new CaptchaSolver();

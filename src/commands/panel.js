@@ -8,6 +8,7 @@ import { runMode, ctx, fetchParsed } from './quests.js';
 import { handleQrLogin } from './token.js';
 import { maskToken } from '../utils/crypto.js';
 import { createCaptchaSession, getPublicBaseUrl } from '../server/captcha-relay.js';
+import { solver } from '../engine/captcha-solver.js';
 
 export function buildPanelMessage() {
   const embed = new EmbedBuilder()
@@ -33,11 +34,10 @@ export function buildPanelMessage() {
         inline: false,
       },
       {
-        name: `${E.gem()}  KEZELÉS & JUTALMAK`,
+        name: `${E.gem()}  KÜLDETÉSKEZELÉS`,
         value: [
-          '>>> 📡 **Quest Radar** — Elérhető küldetések, követelmények és rewardok',
+          '>>> 📡 **Quest Radar** — Elérhető küldetések, követelmények és jutalmak',
           '✅ **Összes Elfogadása** — Belépés az összes küldetésbe futtatás nélkül',
-          '💰 **Jutalmak Átvétele** — Kész küldetések és orbs/nitro jutalmak beváltása',
           '🔄 **Pult Frissítés** — A vezérlőpult újratöltése',
         ].join('\n'),
         inline: false,
@@ -46,7 +46,6 @@ export function buildPanelMessage() {
         name: `${E.rocket()}  GYORS BEÁLLÍTÁSOK (KAPCSOLÓK)`,
         value: [
           '>>> ⚡ **Turbo Ki/Be** — Alapértelmezett Turbo mód gyorsváltója',
-          '🎁 **Auto-Claim Ki/Be** — Kész jutalmak automatikus átvétele',
           '📝 **Auto-Enroll Ki/Be** — Küldetések automatikus elfogadása',
           '⚙️ **Beállítások Info** — Jelenlegi fiókbeállításaid ellenőrzése',
         ].join('\n'),
@@ -96,7 +95,7 @@ export function buildPanelMessage() {
       .setStyle(ButtonStyle.Danger),
   );
 
-  // Sor 2: Küldetéskezelés & Jutalmak
+  // Sor 2: Küldetéskezelés
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_list')
@@ -107,12 +106,7 @@ export function buildPanelMessage() {
       .setCustomId('btn_accept')
       .setLabel('Összes Elfogadása')
       .setEmoji('✅')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('btn_claim')
-      .setLabel('Jutalmak Átvétele')
-      .setEmoji('💰')
-      .setStyle(ButtonStyle.Success),
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('btn_refresh')
       .setLabel('Pult Frissítés')
@@ -127,11 +121,6 @@ export function buildPanelMessage() {
       .setLabel('Turbo Ki/Be')
       .setEmoji('⚡')
       .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('btn_toggle_claim')
-      .setLabel('Auto-Claim Ki/Be')
-      .setEmoji('🎁')
-      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_toggle_enroll')
       .setLabel('Auto-Enroll Ki/Be')
@@ -266,122 +255,14 @@ export async function handlePanelButton(ix) {
   }
 
   if (id === 'btn_claim' || id === 'panel_claim') {
-    await ix.deferReply({ flags: MessageFlags.Ephemeral });
-    const c = await ctx(ix, 'main');
-    if (c.error) {
-      return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Használd a **📱 QR Belépés** gombot előbb.`)] });
-    }
-
-    try {
-      const api = new DiscordUserAPI(c.token);
-      const raw = await api.fetchAllQuests();
-      const claimable = raw.filter(q => {
-        const s = q.user_status || q.userStatus || {};
-        return (s.completed_at || s.completedAt) && !(s.claimed_at || s.claimedAt);
-      });
-
-      if (!claimable.length) {
-        return ix.editReply({ embeds: [ui('Nincs Jutalom', `${E.gem()} Jelenleg nincs átvételre váró jutalmad.`)] });
-      }
-
-      let n = 0;
-      let captchaBody = null;
-      let failedQuest = null;
-
-      for (const q of claimable) {
-        try {
-          await api.claimReward(q.id);
-          n++;
-        } catch (e) {
-          if (e.body?.captcha_service) {
-            captchaBody = e.body;
-            failedQuest = q;
-            break;
-          }
-        }
-      }
-
-      if (!captchaBody) {
-        return ix.editReply({
-          embeds: [ok('Jutalmak Átvéve', `${E.loot()} Sikeresen átvéve **${n}/${claimable.length}** küldetés jutalma!`)]
-        });
-      }
-
-      // Discord requires hCaptcha -> Launch 1-Click Captcha Relay!
-      const sessionId = createCaptchaSession({
-        sitekey: captchaBody.captcha_sitekey,
-        rqdata: captchaBody.captcha_rqdata,
-        rqtoken: captchaBody.captcha_rqtoken,
-        onSolved: async (solutionToken) => {
-          try {
-            await api.claimReward(failedQuest.id, {
-              captchaKey: solutionToken,
-              rqtoken: captchaBody.captcha_rqtoken,
-            });
-            n++;
-
-            // Try to claim any remaining quests
-            for (const rem of claimable) {
-              if (rem.id === failedQuest.id) continue;
-              try { await api.claimReward(rem.id); n++; } catch {}
-            }
-
-            const successEmbed = ok('Jutalom Sikeresen Átvéve!', [
-              `${E.check()} Captcha feloldva!`,
-              `${E.loot()} **${n}/${claimable.length}** küldetés jutalma aktiválva a fiókodon!`,
-              '',
-              `🎁 A kódok és jutalmak megtalálhatóak a Discord **Gift Inventory**-ban!`
-            ].join('\n'));
-
-            await ix.editReply({ embeds: [successEmbed], components: [] }).catch(() => {});
-          } catch (solveErr) {
-            console.error('[CaptchaClaim] Error claiming after solve:', solveErr.message);
-            await ix.editReply({
-              embeds: [warn('Kézi Átvétel Szükséges', [
-                `${E.warn()} A Discord hCaptcha szervere elutasította a felhős IP-ről érkező beváltást (IP-összerendelési védelem).`,
-                '',
-                `${E.loot()} **Mind a ${claimable.length} küldetésed 100%-ra be van fejezve!**`,
-                `Kattints az alábbi kék gombra, és a Discord **Quests** menüjében 1 kattintással vedd át a jutalmakat a saját gépedről.`
-              ].join('\n'))],
-              components: [
-                new ActionRowBuilder().addComponents(
-                  new ButtonBuilder()
-                    .setLabel('🌐 Nyisd meg a Discordban (Quests)')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL('https://discord.com/app')
-                )
-              ]
-            }).catch(() => {});
-          }
-        }
-      });
-
-      const captchaUrl = `${getPublicBaseUrl()}/captcha/${sessionId}`;
-      const buttonRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setLabel('🧩 Captcha Megoldása (1 Kattintás)')
-          .setStyle(ButtonStyle.Link)
-          .setURL(captchaUrl),
-        new ButtonBuilder()
-          .setLabel('🌐 Nyisd meg a Discordban')
-          .setStyle(ButtonStyle.Link)
-          .setURL('https://discord.com/app')
-      );
-
-      return ix.editReply({
-        embeds: [warn('Captcha Hitelesítés Szükséges', [
-          `${E.warn()} A Discord emberi ellenőrzést (hCaptchát) kér a jutalom jóváírásához.`,
-          '',
-          `${E.loot()} **${claimable.length - n}** kész küldetésed vár átvételre.`,
-          `Kattints az alábbi gombra a feloldáshoz, és a bot **azonnal jóváírja a jutalmat** a fiókodon!`,
-          '',
-          `*Vagy nyisd meg a Discordot (Discover → Quests) és kattints a Claim gombra.*`
-        ].join('\n'))],
-        components: [buttonRow]
-      });
-    } catch (e) {
-      return ix.editReply({ embeds: [err('Hiba', `Nem sikerült a jutalmak átvétele: ${e.message}`)] });
-    }
+    return ix.reply({
+      embeds: [ok('Jutalmak Átvétele', [
+        `${E.check()} **A bot a küldetések 100%-os előrehaladását és teljesítését végzi.**`,
+        '',
+        `${E.loot()} A befejezett küldetések jutalmait (Orb, Nitro, skinek) a Discordban a **Discover (🧭) ➔ Quests** menüpontban veheted át közvetlenül a fiókodra!`,
+      ].join('\n'))],
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   if (id === 'btn_refresh' || id === 'panel_refresh') {
@@ -396,17 +277,6 @@ export async function handlePanelButton(ix) {
     const statusText = next ? `${E.check()} **BEKAPCSOLVA**` : `${E.cross()} **KIKAPCSOLVA**`;
     return ix.reply({
       embeds: [ok('Turbo Mód Váltva', `${E.rocket()} A fiókod alapértelmezett Turbo módja mostantól: ${statusText}`)],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
-  if (id === 'btn_toggle_claim') {
-    const s = getSettings(uid);
-    const next = s.auto_claim ? 0 : 1;
-    saveSettings(uid, { auto_claim: next });
-    const statusText = next ? `${E.check()} **BEKAPCSOLVA**` : `${E.cross()} **KIKAPCSOLVA**`;
-    return ix.reply({
-      embeds: [ok('Auto-Claim Váltva', `${E.loot()} Az automatikus jutalomátvétel a fiókodon: ${statusText}`)],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -428,7 +298,6 @@ export async function handlePanelButton(ix) {
     return ix.reply({
       embeds: [ui('Fiók Beállításaid', [
         `${E.rocket()} Turbo mód: **${on(s.turbo_mode)}**`,
-        `${E.loot()} Auto-claim jutalmak: **${on(s.auto_claim)}**`,
         `${E.spark()} Auto-enroll küldetések: **${on(s.auto_enroll)}**`,
       ].join('\n'))],
       flags: MessageFlags.Ephemeral,

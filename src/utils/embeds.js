@@ -99,10 +99,10 @@ export function helpEmbed() {
     '',
     `${E.radar()} **Quests**`,
     '`/quests list` · `/quests accept` · `/quests all` · `/quests run`',
-    '`/quests turbo` · `/quests stop` · `/quests status` · `/quests claim` · `/quests info`',
+    '`/quests turbo` · `/quests stop` · `/quests status` · `/quests info`',
     '',
     `${E.gem()} **Settings**`,
-    '`/settings view` · `/settings turbo` · `/settings claim` · `/settings enroll`',
+    '`/settings view` · `/settings turbo` · `/settings enroll`',
   ].join('\n'));
 }
 

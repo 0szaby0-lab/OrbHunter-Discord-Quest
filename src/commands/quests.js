@@ -91,9 +91,7 @@ export const commands = [
     .addSubcommand(s => s.setName('turbo').setDescription('Fast complete')
       .addStringOption(o => o.setName('label').setDescription('Token label')))
     .addSubcommand(s => s.setName('stop').setDescription('Stop run'))
-    .addSubcommand(s => s.setName('status').setDescription('Check progress'))
-    .addSubcommand(s => s.setName('claim').setDescription('Claim rewards')
-      .addStringOption(o => o.setName('label').setDescription('Token label'))),
+    .addSubcommand(s => s.setName('status').setDescription('Check progress')),
 ];
 
 export const handlers = {
@@ -177,36 +175,6 @@ export const handlers = {
       const state = getRunState(ix.user.id);
       if (!state) return ix.reply({ embeds: [ui('Idle', `${E.clock()} No active run.`)], flags: MessageFlags.Ephemeral });
       return ix.reply({ embeds: [statusEmbed(state.engine?.tasks, `${E.bolt()} In progress…`)], flags: MessageFlags.Ephemeral });
-    }
-
-    if (sub === 'claim') {
-      await ix.deferReply({ flags: MessageFlags.Ephemeral });
-      const c = await ctx(ix, label);
-      if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)] });
-
-      const api = new DiscordUserAPI(c.token);
-      const raw = await api.fetchAllQuests();
-      const claimable = raw.filter(q => {
-        const s = q.user_status || q.userStatus || {};
-        return (s.completed_at || s.completedAt) && !(s.claimed_at || s.claimedAt);
-      });
-
-      if (!claimable.length) return ix.editReply({ embeds: [ui('Nothing', 'No rewards to claim.')] });
-
-      let n = 0;
-      let captcha = false;
-      for (const q of claimable) {
-        try { await api.claimReward(q.id); n++; }
-        catch (e) { if (e.body?.captcha_service) captcha = true; }
-      }
-
-      const body = captcha
-        ? `${E.warn()} Discord now requires a captcha to claim rewards, so this can't be done through the API.`
-          + `\n\n${E.loot()} Your **${claimable.length}** completed quest(s) are waiting — open **Discover → Quests**`
-          + ` in Discord and tap **Claim** to collect the orbs.`
-        : `${E.loot()} Claimed **${n}/${claimable.length}** rewards.`;
-
-      return ix.editReply({ embeds: [captcha ? warn('Claim Manually', body) : ok('Claimed', body)] });
     }
   },
 };

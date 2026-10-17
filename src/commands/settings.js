@@ -11,8 +11,6 @@ export const commands = [
     .addSubcommand(s => s.setName('view').setDescription('Show settings'))
     .addSubcommand(s => s.setName('turbo').setDescription('Default turbo mode')
       .addBooleanOption(o => o.setName('enabled').setDescription('Enable turbo').setRequired(true)))
-    .addSubcommand(s => s.setName('claim').setDescription('Auto-claim rewards')
-      .addBooleanOption(o => o.setName('enabled').setDescription('Auto-claim on').setRequired(true)))
     .addSubcommand(s => s.setName('enroll').setDescription('Auto-enroll quests')
       .addBooleanOption(o => o.setName('enabled').setDescription('Auto-enroll on').setRequired(true))),
 ];
@@ -27,7 +25,6 @@ export const handlers = {
       return ix.reply({
         embeds: [ui('Settings', [
           `${E.rocket()} turbo · **${on(s.turbo_mode)}**`,
-          `${E.loot()} auto-claim · **${on(s.auto_claim)}**`,
           `${E.spark()} auto-enroll · **${on(s.auto_enroll)}**`,
         ].join('\n'))],
         flags: MessageFlags.Ephemeral,
@@ -35,7 +32,7 @@ export const handlers = {
     }
 
     const enabled = ix.options.getBoolean('enabled');
-    const key = sub === 'turbo' ? 'turbo_mode' : sub === 'claim' ? 'auto_claim' : 'auto_enroll';
+    const key = sub === 'turbo' ? 'turbo_mode' : 'auto_enroll';
     saveSettings(uid, { [key]: enabled ? 1 : 0 });
 
     return ix.reply({ embeds: [ok('Updated', `${sub}: **${on(enabled)}**`)], flags: MessageFlags.Ephemeral });

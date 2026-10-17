@@ -181,13 +181,23 @@ export class DiscordUserAPI {
 
   claimReward(questId, captcha = null) {
     const headers = {};
+    const body = { location: 11, platform: 0 };
     if (captcha?.captchaKey) {
       headers['X-Captcha-Key'] = captcha.captchaKey;
+      body.captcha_key = captcha.captchaKey;
     }
     if (captcha?.rqtoken) {
       headers['X-Captcha-Rqtoken'] = captcha.rqtoken;
+      body.captcha_rqtoken = captcha.rqtoken;
     }
-    return this.post(`/quests/${questId}/claim-reward`, { location: 11, platform: 0 }, headers);
+    if (captcha?.sessionId) {
+      headers['X-Captcha-Session-Id'] = captcha.sessionId;
+      body.captcha_session_id = captcha.sessionId;
+    }
+    if (captcha?.userAgent) {
+      headers['User-Agent'] = captcha.userAgent;
+    }
+    return this.post(`/quests/${questId}/claim-reward`, body, headers);
   }
 
   async getApplication(appId) {

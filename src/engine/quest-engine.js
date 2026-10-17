@@ -19,7 +19,7 @@ export class QuestEngine {
   constructor(token, options = {}) {
     this.api = new DiscordUserAPI(token);
     this.options = {
-      turbo: false, autoEnroll: true, autoClaim: true,
+      turbo: false, autoEnroll: true, autoClaim: false,
       mode: 'parallel', sort: 'default', onProgress: null,
       ...options,
     };
@@ -148,18 +148,6 @@ export class QuestEngine {
       if (ok) {
         results.completed.push(quest);
         this.updateProgress({ id: quest.id, name: quest.name, cur: quest.taskInfo.target, max: quest.taskInfo.target, status: 'DONE' });
-        if (this.options.autoClaim && !quest.claimed) {
-          try {
-            await sleep(1500);
-            await this.api.claimReward(quest.id);
-            quest.claimed = true;
-          } catch (e) {
-            // Discord puts claim-reward behind hCaptcha, which cannot be
-            // solved from the API. The quest still counts as completed.
-            quest.claimError = e.body?.captcha_service ? 'captcha' : (e.message || 'failed');
-            results.needsClaim.push(quest);
-          }
-        }
       } else {
         results.failed.push({ quest, reason: 'failed' });
         this.updateProgress({ id: quest.id, name: quest.name, status: 'FAILED' });
