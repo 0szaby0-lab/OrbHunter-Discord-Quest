@@ -92,9 +92,9 @@ export async function handleQrLogin(ix, label = 'main') {
       sitekey,
       rqdata,
       rqtoken,
-      onSolved: async (captchaToken) => {
+      onSolved: async (captchaToken, userAgent) => {
         try {
-          await solve(captchaToken);
+          await solve(captchaToken, userAgent);
         } catch (e) {
           await ix.editReply({
             embeds: [err('Hiba a jóváhagyáskor', `${E.cross()} ${e.message}`)],

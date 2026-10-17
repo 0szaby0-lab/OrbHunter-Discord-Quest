@@ -184,7 +184,8 @@ export function renderCaptchaPage(session) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: '${session.id}',
-              token: token
+              token: token,
+              userAgent: navigator.userAgent
             })
           })
           .then(function(r) { return r.json(); })
@@ -235,7 +236,7 @@ export async function handleCaptchaRequest(req, res) {
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
-        const { id, token } = JSON.parse(body);
+        const { id, token, userAgent } = JSON.parse(body);
         const session = getCaptchaSession(id);
         if (!session) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -249,8 +250,8 @@ export async function handleCaptchaRequest(req, res) {
           return;
         }
 
-        // Execute solve callback
-        await session.onSolved(token);
+        // Execute solve callback with token and matching userAgent
+        await session.onSolved(token, userAgent);
         activeSessions.delete(id);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });

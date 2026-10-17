@@ -314,8 +314,8 @@ export class RemoteAuthSession extends EventEmitter {
               sessionId: json.captcha_session_id,
               ticket,
               cookies: res.cookies,
-              solve: async (captchaKey) => {
-                return this._submitCaptchaToken(ticket, captchaKey, json, res.cookies);
+              solve: async (captchaKey, userAgent) => {
+                return this._submitCaptchaToken(ticket, captchaKey, json, res.cookies, userAgent);
               },
             });
             return;
@@ -357,20 +357,36 @@ export class RemoteAuthSession extends EventEmitter {
    * Submit a solved captcha token to Discord's remote-auth/login endpoint.
    * Returns true if login succeeded and 'finish' event was emitted.
    */
-  async _submitCaptchaToken(ticket, captchaKey, captchaJson, cookies) {
+  async _submitCaptchaToken(ticket, captchaKey, captchaJson, cookies, userAgent) {
     console.log(`[RemoteAuth] Submitting solved captcha_key to Discord...`);
 
     const retryBody = {
       ticket,
       captcha_key: captchaKey,
+      captcha_service: 'hcaptcha',
     };
+    if (captchaJson.captcha_session_id) {
+      retryBody.captcha_session_id = captchaJson.captcha_session_id;
+    }
     if (captchaJson.captcha_rqtoken) {
       retryBody.captcha_rqtoken = captchaJson.captcha_rqtoken;
     }
 
-    const retryHeaders = {};
+    const retryHeaders = {
+      'X-Captcha-Key': captchaKey,
+      'X-Captcha-Service': 'hcaptcha',
+    };
+    if (captchaJson.captcha_session_id) {
+      retryHeaders['X-Captcha-Session-Id'] = captchaJson.captcha_session_id;
+    }
+    if (captchaJson.captcha_rqtoken) {
+      retryHeaders['X-Captcha-Rqtoken'] = captchaJson.captcha_rqtoken;
+    }
     if (cookies) {
       retryHeaders['Cookie'] = cookies;
+    }
+    if (userAgent) {
+      retryHeaders['User-Agent'] = userAgent;
     }
 
     const retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
