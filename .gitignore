@@ -9,3 +9,4 @@ data/emoji-map.json
 .DS_Store
 Thumbs.db
 discord-login-qr.png
+.chromium_profile/

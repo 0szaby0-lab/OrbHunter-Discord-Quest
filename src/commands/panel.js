@@ -52,12 +52,13 @@ export function buildPanelMessage() {
         inline: false,
       },
       {
-        name: `${E.key()}  FIÓK & BEJELENTKEZÉS`,
+        name: `${E.key()}  FIÓK & CSATLAKOZÁS`,
         value: [
-          '>>> 📱 **QR Belépés** — Discord belépés mobil QR kóddal (vagy `login.bat`)',
-          '🔍 **Fiók Info** — Csatlakoztatott profil és aktív küldetésszám',
-          '📑 **Fiókjaim Listája** — Elmentett profiljaid megtekintése',
-          '🗑️ **Kijelentkezés** — Fiók azonnali törlése az adatbázisból',
+          '>>> 🔑 **Fiók Csatlakoztatása** — Azonnali privát bejelentkező ablak a Discordban',
+          '🌐 **Webes Link** — Csatlakozás a böngészős weboldalon keresztül',
+          '🔍 **Fiók Info** — Csatlakoztatott profilod és aktív küldetéseid száma',
+          '📑 **Fiókjaim** — Elmentett fiókjaid megtekintése',
+          '🗑️ **Kijelentkezés** — Fiókod azonnali leválasztása az adatbázisból',
         ].join('\n'),
         inline: false,
       },
@@ -145,18 +146,23 @@ export function buildPanelMessage() {
   // Sor 4: Fiókkezelés
   const row4 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('btn_login')
-      .setLabel('QR Belépés')
-      .setEmoji('📱')
+      .setCustomId('btn_manual_token')
+      .setLabel('Csatlakozás')
+      .setEmoji('🔑')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('btn_login')
+      .setLabel('Webes Link')
+      .setEmoji('🌐')
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('btn_check')
       .setLabel('Fiók Info')
       .setEmoji('🔍')
-      .setStyle(ButtonStyle.Primary),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_token_list')
-      .setLabel('Fiókjaim Listája')
+      .setLabel('Fiókjaim')
       .setEmoji('📑')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
@@ -350,6 +356,23 @@ export async function handlePanelButton(ix) {
   }
 
   // --- SOR 4: Fiókkezelés ---
+  if (id === 'btn_manual_token') {
+    const modal = new ModalBuilder()
+      .setCustomId('modal_token_input')
+      .setTitle('OrbHunter — Fiók Csatlakoztatása');
+
+    const tokenInput = new TextInputBuilder()
+      .setCustomId('input_user_token')
+      .setLabel('Discord fiók-kulcsod (Token):')
+      .setPlaceholder('Illeszd be a Discord fiók-kulcsodat...')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const actionRow = new ActionRowBuilder().addComponents(tokenInput);
+    modal.addComponents(actionRow);
+    return ix.showModal(modal);
+  }
+
   if (id === 'btn_login' || id === 'panel_login') {
     return handleQrLogin(ix, 'main');
   }

