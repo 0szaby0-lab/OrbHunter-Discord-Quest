@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
-import { ok, warn, err, E, questListEmbed, statusEmbed, helpEmbed } from '../utils/embeds.js';
+import { ok, warn, err, ui, E, questListEmbed, statusEmbed, helpEmbed } from '../utils/embeds.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { getSettings, saveSettings, getDecryptedToken, listTokens, removeToken, saveToken } from '../database/sqlite.js';
