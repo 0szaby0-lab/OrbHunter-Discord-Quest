@@ -10,6 +10,17 @@ import { handleConnectRequest } from './server/web-linker.js';
 // Render.com Web Service HTTP health check, Web Linker & Captcha Relay
 const PORT = process.env.PORT || 10000;
 http.createServer(async (req, res) => {
+  // CORS support for web clients and cross-origin tools
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   try {
     const handledLinker = await handleConnectRequest(req, res);
     if (handledLinker) return;

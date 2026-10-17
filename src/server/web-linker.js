@@ -44,7 +44,10 @@ export function getConnectSession(id) {
 
 export function renderConnectPage(session) {
   const baseUrl = getPublicBaseUrl();
-  const bookmarkletCode = `javascript:(function(){try{var t=null;try{var f=document.createElement('iframe');document.body.appendChild(f);t=JSON.parse(f.contentWindow.localStorage.token);f.remove();}catch(e){}if(!t){try{t=(webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();}catch(e){}}if(!t){alert('Nem sikerült azonosítani a munkamenetet! Kérlek nyisd meg a discord.com-ot és lépj be!');return;}fetch('${baseUrl}/api/connect/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'${session.id}',token:t})}).then(function(r){return r.json();}).then(function(d){if(d.success){alert('🎉 Sikeres csatlakozás! Üdvözöllek, '+d.username+'!');window.location.href='${baseUrl}/connect/${session.id}';}else{alert('Hiba: '+d.error);}}).catch(function(err){alert('Hálózati hiba: '+err.message);});}catch(err){alert('Hiba: '+err.message);}})();`;
+  const bookmarkletCode = `javascript:(function(){try{var t=null;try{var f=document.createElement('iframe');document.body.appendChild(f);t=JSON.parse(f.contentWindow.localStorage.token);f.remove();}catch(e){}if(!t){try{t=(webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();}catch(e){}}if(!t){alert('Nem sikerült azonosítani a munkamenetet! Kérlek lépj be a Discordba a böngésződben (discord.com/app)!');return;}window.location.href='${baseUrl}/connect/${session.id}?token='+encodeURIComponent(t);}catch(err){alert('Hiba: '+err.message);}})();`;
+
+  const isAlreadyLinked = !!session.linkedUser;
+  const username = session.linkedUser || session.username;
 
   return `<!DOCTYPE html>
 <html lang="hu">
@@ -229,6 +232,7 @@ export function renderConnectPage(session) {
       box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.3);
     }
     .submit-btn {
+      display: block;
       width: 100%;
       background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
       color: #fff;
@@ -239,6 +243,8 @@ export function renderConnectPage(session) {
       border-radius: 12px;
       padding: 13px 20px;
       cursor: pointer;
+      text-align: center;
+      text-decoration: none;
       transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
       box-shadow: 0 4px 15px rgba(88, 101, 242, 0.35);
     }
@@ -282,7 +288,6 @@ export function renderConnectPage(session) {
       color: #ff7b72;
     }
     .success-card {
-      display: none;
       background: rgba(35, 165, 90, 0.16);
       border: 1px solid var(--success);
       border-radius: 18px;
@@ -313,23 +318,39 @@ export function renderConnectPage(session) {
     <h1>OrbHunter Csatlakozás</h1>
     <p class="subtitle">Üdv, <b>${session.username}</b>! Csatlakoztasd a fiókodat az automatikus küldetéskezeléshez.</p>
 
-    <div id="connectArea">
+    <div id="connectArea" style="display: ${isAlreadyLinked ? 'none' : 'block'};">
       <div class="tab-container">
-        <button type="button" class="tab-btn active" onclick="switchTab('direct')">🔑 Közvetlen Belépés</button>
-        <button type="button" class="tab-btn" onclick="switchTab('bookmarklet')">⚡ 1-Kattintás (Gép)</button>
+        <button type="button" class="tab-btn active" onclick="switchTab('bookmarklet')">⚡ 1-Kattintás (Gép)</button>
+        <button type="button" class="tab-btn" onclick="switchTab('direct')">🔑 Közvetlen Belépés</button>
       </div>
 
-      <!-- Tab 1: Direct Token Input (Universal for Mobile & PC) -->
-      <div id="tabDirect" class="tab-pane active">
+      <!-- Tab 1: 1-Click Bookmarklet (Desktop Browsers) -->
+      <div id="tabBookmarklet" class="tab-pane active">
+        <div class="bookmarklet-box">
+          <a class="bookmarklet-link" href="${bookmarkletCode}">⚡ OrbHunter Csatlakozás</a>
+          <p style="font-size: 12px; color: var(--text-muted);">Húzd fel ezt a kék gombot a könyvjelzősávodra!</p>
+        </div>
+
+        <ol class="instructions-list">
+          <li><b>1.</b> Húzd fel a fenti kék gombot a <b>Könyvjelzősávodra</b> (Ctrl+Shift+B ha nem látod).</li>
+          <li><b>2.</b> Nyisd meg a Discordot a böngészőben (<code>discord.com/app</code>).</li>
+          <li><b>3.</b> Kattints a könyvjelzőre ➔ Azonnal aktiválódik a profilod és ide visszatér!</li>
+        </ol>
+      </div>
+
+      <!-- Tab 2: Direct Token Input (Universal for Mobile & PC) -->
+      <div id="tabDirect" class="tab-pane">
         <form onsubmit="handleDirectSubmit(event)">
           <label class="input-label" for="userTokenInput">Discord Fiók-kulcs (Token)</label>
           <div class="input-wrap">
-            <input type="password" id="userTokenInput" class="input-field" placeholder="Illeszd be ide a fiók-kulcsodat..." autocomplete="off" required>
+            <input type="password" id="userTokenInput" class="input-field" placeholder="Illeszd be ide a fiók-kulcsodat..." autocomplete="off">
           </div>
           <button type="submit" id="directSubmitBtn" class="submit-btn">🚀 Fiók Csatlakoztatása</button>
         </form>
 
-        <div id="directStatus" class="status-msg"></div>
+        <div id="directStatus" class="status-msg ${session.linkError ? 'error' : ''}">
+          ${session.linkError ? '❌ <b>Hiba:</b> ' + session.linkError : ''}
+        </div>
 
         <details class="guide-box">
           <summary>🔍 Hogyan találom meg a kulcsomat 10 másodperc alatt?</summary>
@@ -337,27 +358,14 @@ export function renderConnectPage(session) {
           <p style="margin-top:6px;"><b>Biztonság:</b> A kulcsod AES-256 titkosítással tárolódik a saját szervereden. Senki más nem látja.</p>
         </details>
       </div>
-
-      <!-- Tab 2: 1-Click Bookmarklet (Desktop Browsers) -->
-      <div id="tabBookmarklet" class="tab-pane">
-        <div class="bookmarklet-box">
-          <a class="bookmarklet-link" href="${bookmarkletCode}">⚡ OrbHunter Csatlakozás</a>
-          <p style="font-size: 12px; color: var(--text-muted);">Húzd fel ezt a gombot a könyvjelzősávodra!</p>
-        </div>
-
-        <ol class="instructions-list">
-          <li><b>1.</b> Húzd fel a fenti kék gombot a böngésződ <b>Könyvjelzősávjára</b>.</li>
-          <li><b>2.</b> Nyisd meg a Discordot (<code>discord.com/app</code>).</li>
-          <li><b>3.</b> Kattints a könyvjelzőre ➔ A fiókod automatikusan aktiválódik!</li>
-        </ol>
-      </div>
     </div>
 
     <!-- Success View -->
-    <div id="successCard" class="success-card">
+    <div id="successCard" class="success-card" style="display: ${isAlreadyLinked ? 'block' : 'none'};">
       <div style="font-size: 44px; margin-bottom: 12px;">🎉</div>
-      <h2 id="successUsername">Sikeres Csatlakozás!</h2>
-      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br><br>A felhős szerver mostantól 24/7 automatikusan végzi a küldetéseidet. Visszatérhetsz a Discordba!</p>
+      <h2 id="successUsername">Üdv, ${username}!</h2>
+      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br><br>A felhős szerver mostantól 24/7 automatikusan végzi a küldetéseidet.</p>
+      <a href="https://discord.com/app" class="submit-btn" style="margin-top: 20px;">🎮 Vissza a Discordba</a>
     </div>
 
     <p class="footer-note">🔒 Biztonságos felhő • Adataid AES-256 titkosítással védve a Renderen tárolódnak.</p>
@@ -366,14 +374,19 @@ export function renderConnectPage(session) {
   <script>
     var sessionId = '${session.id}';
 
+    // Clean sensitive token param from browser address bar immediately
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
       document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
       if (tab === 'direct') {
-        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
         document.getElementById('tabDirect').classList.add('active');
       } else {
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
         document.getElementById('tabBookmarklet').classList.add('active');
       }
     }
@@ -457,6 +470,33 @@ export async function handleConnectRequest(req, res) {
         <p style="color:#949ba4;">Indíts új bejelentkezést a Discord felületén a <code>/login</code> paranccsal vagy a vezérlőpult gombjával.</p>
       </body></html>`);
       return true;
+    }
+
+    // Handle token supplied via bookmarklet navigation (?token=...)
+    const tokenParam = url.searchParams.get('token');
+    if (tokenParam && !session.linkedUser) {
+      try {
+        const cleanToken = tokenParam.trim().replace(/^"(.*)"$/, '$1');
+        const api = new DiscordUserAPI(cleanToken);
+        const user = await api.getCurrentUser();
+        const savedUsername = user.global_name || user.username;
+
+        saveToken(session.uid, session.label || 'main', cleanToken, {
+          id: user.id,
+          username: savedUsername,
+        });
+
+        session.linkedUser = savedUsername;
+
+        if (typeof session.onLinked === 'function') {
+          session.onLinked({ user, token: cleanToken }).catch(e => console.warn('[WebLinker] onLinked error:', e.message));
+        }
+
+        console.log(`[WebLinker] ✅ 1-Kattintásos felhős csatlakozás: ${savedUsername} (${user.id})`);
+      } catch (err) {
+        console.error('[WebLinker] Token query error:', err.message);
+        session.linkError = err.message;
+      }
     }
 
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
