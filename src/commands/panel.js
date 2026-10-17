@@ -330,12 +330,28 @@ export async function handlePanelButton(ix) {
               `${E.check()} Captcha feloldva!`,
               `${E.loot()} **${n}/${claimable.length}** küldetés jutalma aktiválva a fiókodon!`,
               '',
-              `🎁 A kódok/jutalmak megtalálhatóak a Discord **Gift Inventory**-ban!`
+              `🎁 A kódok és jutalmak megtalálhatóak a Discord **Gift Inventory**-ban!`
             ].join('\n'));
 
-            await ix.followUp({ embeds: [successEmbed], flags: MessageFlags.Ephemeral }).catch(() => {});
+            await ix.editReply({ embeds: [successEmbed], components: [] }).catch(() => {});
           } catch (solveErr) {
             console.error('[CaptchaClaim] Error claiming after solve:', solveErr.message);
+            await ix.editReply({
+              embeds: [warn('Kézi Átvétel Szükséges', [
+                `${E.warn()} A Discord hCaptcha szervere elutasította a felhős IP-ről érkező beváltást (IP-összerendelési védelem).`,
+                '',
+                `${E.loot()} **Mind a ${claimable.length} küldetésed 100%-ra be van fejezve!**`,
+                `Kattints az alábbi kék gombra, és a Discord **Quests** menüjében 1 kattintással vedd át a jutalmakat a saját gépedről.`
+              ].join('\n'))],
+              components: [
+                new ActionRowBuilder().addComponents(
+                  new ButtonBuilder()
+                    .setLabel('🌐 Nyisd meg a Discordban (Quests)')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL('https://discord.com/app')
+                )
+              ]
+            }).catch(() => {});
           }
         }
       });
