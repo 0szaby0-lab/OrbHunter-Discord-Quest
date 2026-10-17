@@ -70,10 +70,10 @@ export class DiscordUserAPI {
     };
   }
 
-  async request(method, path, body = null) {
+  async request(method, path, body = null, extraHeaders = {}) {
     await resolveBuildNumber();
     const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
-    const opts = { method, headers: this.headers() };
+    const opts = { method, headers: { ...this.headers(), ...extraHeaders } };
     if (body) opts.body = JSON.stringify(body);
 
     const res = await fetch(url, opts);
@@ -90,8 +90,8 @@ export class DiscordUserAPI {
     return data;
   }
 
-  get(path) { return this.request('GET', path); }
-  post(path, body) { return this.request('POST', path, body); }
+  get(path, headers = {}) { return this.request('GET', path, null, headers); }
+  post(path, body, headers = {}) { return this.request('POST', path, body, headers); }
 
   getCurrentUser() { return this.get('/users/@me'); }
 
@@ -179,8 +179,15 @@ export class DiscordUserAPI {
     return this.post(`/quests/${questId}/heartbeat`, payload);
   }
 
-  claimReward(questId) {
-    return this.post(`/quests/${questId}/claim-reward`, { location: 11, platform: 0 });
+  claimReward(questId, captcha = null) {
+    const headers = {};
+    if (captcha?.captchaKey) {
+      headers['X-Captcha-Key'] = captcha.captchaKey;
+    }
+    if (captcha?.rqtoken) {
+      headers['X-Captcha-Rqtoken'] = captcha.rqtoken;
+    }
+    return this.post(`/quests/${questId}/claim-reward`, { location: 11, platform: 0 }, headers);
   }
 
   async getApplication(appId) {

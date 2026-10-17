@@ -151,9 +151,9 @@ export function renderCaptchaPage(session) {
 </head>
 <body>
   <div class="card">
-    <div class="logo-badge">🛡️</div>
-    <h1>Discord Hitelesítés</h1>
-    <p>A Discord felhős biztonsági ellenőrzést kér a fiókodhoz. Kattints az alábbi dobozra a bejelentkezés véglegesítéséhez!</p>
+    <div class="logo-badge">🎁</div>
+    <h1>OrbHunter — Jutalom Beváltása</h1>
+    <p>A Discord emberi ellenőrzést (hCaptchát) kér a küldetésjutalmaid jóváírásához. Kattints az alábbi dobozra a beváltás azonnali jóváhagyásához!</p>
 
     <div class="captcha-container">
       <div id="hcaptcha-widget" data-host="discord.com"></div>
@@ -177,7 +177,7 @@ export function renderCaptchaPage(session) {
         theme: 'dark',
         callback: function(token) {
           var status = document.getElementById('status');
-          status.innerHTML = '⚡ <em>Jóváhagyás küldése a Discordnak...</em>';
+          status.innerHTML = '⚡ <em>Jutalom beváltása a Discordnál...</em>';
 
           fetch('/api/captcha/solve', {
             method: 'POST',
@@ -191,11 +191,11 @@ export function renderCaptchaPage(session) {
           .then(function(r) { return r.json(); })
           .then(function(res) {
             if (res.success) {
-              status.innerHTML = '<span style="color: var(--success); font-size: 16px;">🎉 Sikeres feloldás! A fiókod bejelentkezett. Visszatérhetsz a Discordba.</span>';
+              status.innerHTML = '<span style="color: var(--success); font-size: 16px;">🎉 Sikeres feloldás! A jutalmad jóváírva a fiókodon. Visszatérhetsz a Discordba!</span>';
               var widget = document.getElementById('hcaptcha-widget');
               if (widget) widget.style.display = 'none';
             } else {
-              status.innerHTML = '<span style="color: #ed4245;">❌ Hiba: ' + (res.error || 'Nem sikerült a bejelentkezés') + '</span>';
+              status.innerHTML = '<span style="color: #ed4245;">❌ Hiba: ' + (res.error || 'Nem sikerült a beváltás') + '</span>';
             }
           })
           .catch(function(err) {

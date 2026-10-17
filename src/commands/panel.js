@@ -7,6 +7,7 @@ import { filterRunnableQuests } from '../engine/quest-parser.js';
 import { runMode, ctx, fetchParsed } from './quests.js';
 import { handleQrLogin } from './token.js';
 import { maskToken } from '../utils/crypto.js';
+import { createCaptchaSession, getPublicBaseUrl } from '../server/captcha-relay.js';
 
 export function buildPanelMessage() {
   const embed = new EmbedBuilder()
@@ -284,21 +285,84 @@ export async function handlePanelButton(ix) {
       }
 
       let n = 0;
-      let captcha = false;
+      let captchaBody = null;
+      let failedQuest = null;
+
       for (const q of claimable) {
         try {
           await api.claimReward(q.id);
           n++;
         } catch (e) {
-          if (e.body?.captcha_service) captcha = true;
+          if (e.body?.captcha_service) {
+            captchaBody = e.body;
+            failedQuest = q;
+            break;
+          }
         }
       }
 
-      const body = captcha
-        ? `${E.warn()} A Discord közvetlen captchát kér a beváltáshoz.\n\n${E.loot()} **${claimable.length}** kész küldetésed vár: nyisd meg a Discordban a **Discover → Quests** menüt és kattints a **Claim** gombra.`
-        : `${E.loot()} Sikeresen átvéve **${n}/${claimable.length}** küldetés jutalma!`;
+      if (!captchaBody) {
+        return ix.editReply({
+          embeds: [ok('Jutalmak Átvéve', `${E.loot()} Sikeresen átvéve **${n}/${claimable.length}** küldetés jutalma!`)]
+        });
+      }
 
-      return ix.editReply({ embeds: [captcha ? warn('Kézi Beváltás Szükséges', body) : ok('Jutalmak Átvéve', body)] });
+      // Discord requires hCaptcha -> Launch 1-Click Captcha Relay!
+      const sessionId = createCaptchaSession({
+        sitekey: captchaBody.captcha_sitekey,
+        rqdata: captchaBody.captcha_rqdata,
+        rqtoken: captchaBody.captcha_rqtoken,
+        onSolved: async (solutionToken) => {
+          try {
+            await api.claimReward(failedQuest.id, {
+              captchaKey: solutionToken,
+              rqtoken: captchaBody.captcha_rqtoken,
+            });
+            n++;
+
+            // Try to claim any remaining quests
+            for (const rem of claimable) {
+              if (rem.id === failedQuest.id) continue;
+              try { await api.claimReward(rem.id); n++; } catch {}
+            }
+
+            const successEmbed = ok('Jutalom Sikeresen Átvéve!', [
+              `${E.check()} Captcha feloldva!`,
+              `${E.loot()} **${n}/${claimable.length}** küldetés jutalma aktiválva a fiókodon!`,
+              '',
+              `🎁 A kódok/jutalmak megtalálhatóak a Discord **Gift Inventory**-ban!`
+            ].join('\n'));
+
+            await ix.followUp({ embeds: [successEmbed], flags: MessageFlags.Ephemeral }).catch(() => {});
+          } catch (solveErr) {
+            console.error('[CaptchaClaim] Error claiming after solve:', solveErr.message);
+          }
+        }
+      });
+
+      const captchaUrl = `${getPublicBaseUrl()}/captcha/${sessionId}`;
+      const buttonRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('🧩 Captcha Megoldása (1 Kattintás)')
+          .setStyle(ButtonStyle.Link)
+          .setURL(captchaUrl),
+        new ButtonBuilder()
+          .setLabel('🌐 Nyisd meg a Discordban')
+          .setStyle(ButtonStyle.Link)
+          .setURL('https://discord.com/app')
+      );
+
+      return ix.editReply({
+        embeds: [warn('Captcha Hitelesítés Szükséges', [
+          `${E.warn()} A Discord emberi ellenőrzést (hCaptchát) kér a jutalom jóváírásához.`,
+          '',
+          `${E.loot()} **${claimable.length - n}** kész küldetésed vár átvételre.`,
+          `Kattints az alábbi gombra a feloldáshoz, és a bot **azonnal jóváírja a jutalmat** a fiókodon!`,
+          '',
+          `*Vagy nyisd meg a Discordot (Discover → Quests) és kattints a Claim gombra.*`
+        ].join('\n'))],
+        components: [buttonRow]
+      });
     } catch (e) {
       return ix.editReply({ embeds: [err('Hiba', `Nem sikerült a jutalmak átvétele: ${e.message}`)] });
     }
