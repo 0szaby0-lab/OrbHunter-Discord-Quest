@@ -1,13 +1,14 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getDecryptedToken, getSettings, logQuest, listTokens } from '../database/sqlite.js';
+import { getDecryptedToken, getSettings, logQuest, listTokens, getActiveLabel } from '../database/sqlite.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { parseAllQuests, filterRunnableQuests } from '../engine/quest-parser.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { ok, warn, err, questListEmbed, statusEmbed, ui, bar, fmtSec, E } from '../utils/embeds.js';
 import { taskIcon } from '../utils/emojis.js';
 
-export function getToken(uid, label = 'main') {
-  const token = getDecryptedToken(uid, label) || getDecryptedToken(uid, 'default');
+export function getToken(uid, label = null) {
+  const activeLabel = label || getActiveLabel(uid) || 'main';
+  const token = getDecryptedToken(uid, activeLabel) || getDecryptedToken(uid, 'main') || getDecryptedToken(uid, 'default');
   if (token) return token;
   const all = listTokens(uid);
   if (all && all.length > 0) {
@@ -26,14 +27,15 @@ export async function fetchParsed(token) {
   return parseAllQuests(raw);
 }
 
-export async function ctx(ix, label = 'main') {
-  const token = getToken(ix.user.id, label);
-  if (!token) return { error: true };
-  return { token, settings: getSettings(ix.user.id), userId: ix.user.id };
+export async function ctx(ix, label = null) {
+  const activeLabel = label || getActiveLabel(ix.user.id) || 'main';
+  const token = getToken(ix.user.id, activeLabel);
+  if (!token) return { error: true, label: activeLabel };
+  return { token, settings: getSettings(ix.user.id), userId: ix.user.id, label: activeLabel };
 }
 
 export async function runMode(ix, opts = {}) {
-  const label = ix.options?.getString?.('label') || 'main';
+  const label = ix.options?.getString?.('label') || null;
   const c = await ctx(ix, label);
   if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a zöld **🔑 Csatlakozás** gombra a tokened megadásához, vagy a **🌐 Webes Link** gombra!`)] });
 

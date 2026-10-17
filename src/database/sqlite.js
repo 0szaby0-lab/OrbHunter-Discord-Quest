@@ -28,9 +28,10 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS user_settings (
     discord_user_id TEXT PRIMARY KEY,
     turbo_mode INTEGER DEFAULT 0,
-    auto_claim INTEGER DEFAULT 1,
+    auto_claim INTEGER DEFAULT 0,
     auto_enroll INTEGER DEFAULT 1,
-    default_mode TEXT DEFAULT 'blaze'
+    default_mode TEXT DEFAULT 'blaze',
+    active_label TEXT DEFAULT 'main'
   );
 
   CREATE TABLE IF NOT EXISTS quest_logs (
@@ -43,6 +44,10 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 `);
+
+try {
+  db.exec("ALTER TABLE user_settings ADD COLUMN active_label TEXT DEFAULT 'main'");
+} catch {}
 
 const stmts = {
   addToken: db.prepare(`
@@ -58,13 +63,14 @@ const stmts = {
   listTokens: db.prepare('SELECT id, label, discord_account_id, discord_username, created_at FROM user_tokens WHERE discord_user_id = ?'),
   getSettings: db.prepare('SELECT * FROM user_settings WHERE discord_user_id = ?'),
   upsertSettings: db.prepare(`
-    INSERT INTO user_settings (discord_user_id, turbo_mode, auto_claim, auto_enroll, default_mode)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO user_settings (discord_user_id, turbo_mode, auto_claim, auto_enroll, default_mode, active_label)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(discord_user_id) DO UPDATE SET
       turbo_mode = excluded.turbo_mode,
       auto_claim = excluded.auto_claim,
       auto_enroll = excluded.auto_enroll,
-      default_mode = excluded.default_mode
+      default_mode = excluded.default_mode,
+      active_label = excluded.active_label
   `),
   logQuest: db.prepare('INSERT INTO quest_logs (discord_user_id, quest_id, quest_name, status, message) VALUES (?, ?, ?, ?, ?)'),
 };
@@ -95,7 +101,7 @@ export function listTokens(discordUserId) {
 
 export function getSettings(discordUserId) {
   const row = stmts.getSettings.get(discordUserId);
-  return row || { turbo_mode: 0, auto_claim: 1, auto_enroll: 1, default_mode: 'blaze' };
+  return row || { turbo_mode: 0, auto_claim: 0, auto_enroll: 1, default_mode: 'blaze', active_label: 'main' };
 }
 
 export function saveSettings(discordUserId, settings) {
@@ -106,7 +112,16 @@ export function saveSettings(discordUserId, settings) {
     settings.auto_claim ?? current.auto_claim,
     settings.auto_enroll ?? current.auto_enroll,
     settings.default_mode ?? current.default_mode,
+    settings.active_label ?? current.active_label ?? 'main',
   );
+}
+
+export function getActiveLabel(discordUserId) {
+  return getSettings(discordUserId).active_label || 'main';
+}
+
+export function setActiveLabel(discordUserId, label) {
+  saveSettings(discordUserId, { active_label: label });
 }
 
 export function logQuest(discordUserId, questId, questName, status, message) {

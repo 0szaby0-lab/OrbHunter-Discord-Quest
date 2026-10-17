@@ -34,12 +34,12 @@ export function createBot(rest = null) {
       return;
     }
 
-    if (ix.isButton()) {
+    if (ix.isButton() || ix.isStringSelectMenu()) {
       try {
         await handlePanelButton(ix);
       } catch (e) {
-        console.error(`[Button:${ix.customId}]`, e);
-        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a gomb megnyomásakor.')], flags: MessageFlags.Ephemeral };
+        console.error(`[Interaction:${ix.customId}]`, e);
+        const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a művelet végrehajtásakor.')], flags: MessageFlags.Ephemeral };
         if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
         else await ix.reply(payload).catch(() => {});
       }
