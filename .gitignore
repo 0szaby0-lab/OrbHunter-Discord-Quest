@@ -8,3 +8,4 @@ data/emoji-map.json
 *.log
 .DS_Store
 Thumbs.db
+discord-login-qr.png

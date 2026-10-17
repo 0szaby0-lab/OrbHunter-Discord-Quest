@@ -104,7 +104,7 @@ export const handlers = {
     if (sub === 'list') {
       await ix.deferReply();
       const c = await ctx(ix, label);
-      if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
+      if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)] });
 
       const api = new DiscordUserAPI(c.token);
       const [quests, diag] = await Promise.all([
@@ -118,7 +118,7 @@ export const handlers = {
     if (sub === 'info') {
       await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const c = await ctx(ix, label);
-      if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
+      if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)] });
 
       const search = ix.options.getString('name').toLowerCase();
       const q = (await fetchParsed(c.token)).find(x => x.name.toLowerCase().includes(search));
@@ -139,7 +139,7 @@ export const handlers = {
     if (sub === 'accept') {
       await ix.deferReply();
       const c = await ctx(ix, label);
-      if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
+      if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)] });
 
       const engine = new QuestEngine(c.token);
       const quests = filterRunnableQuests(await engine.fetchQuests());
@@ -182,7 +182,7 @@ export const handlers = {
     if (sub === 'claim') {
       await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const c = await ctx(ix, label);
-      if (c.error) return ix.editReply({ embeds: [warn('No Token', `${E.key()} \`/token add\``)] });
+      if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)] });
 
       const api = new DiscordUserAPI(c.token);
       const raw = await api.fetchAllQuests();

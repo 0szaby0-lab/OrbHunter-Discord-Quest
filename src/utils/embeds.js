@@ -51,7 +51,7 @@ export function questListEmbed(quests, diag = null) {
     const lines = [
       `${E.warn()} No active quests on this account right now.`,
       '',
-      `${E.key()} Make sure \`/token add\` used your **user** token — a bot token always sees zero quests.`,
+      `${E.key()} Csatlakoztasd a fiókodat a \`/login\` paranccsal vagy a \`login.bat\`-tal.`,
       `${E.radar()} You don't need to accept anything first; \`/quests all\` joins them for you.`,
     ];
     if (diag) {
@@ -94,8 +94,8 @@ export function statusEmbed(tasks, msg) {
 
 export function helpEmbed() {
   return ui('Commands', [
-    `${E.key()} **Bejelentkezés & Token**`,
-    '`/login` · `/token login` · `/token check` · `/token list` · `/token remove` · `/token add`',
+    `${E.key()} **Bejelentkezés & Fiók**`,
+    '`/login` · `/token login` · `/token check` · `/token list` · `/token remove`',
     '',
     `${E.radar()} **Quests**`,
     '`/quests list` · `/quests accept` · `/quests all` · `/quests run`',

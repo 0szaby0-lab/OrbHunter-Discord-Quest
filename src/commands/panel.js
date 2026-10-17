@@ -54,11 +54,10 @@ export function buildPanelMessage() {
       {
         name: `${E.key()}  FIÓK & BEJELENTKEZÉS`,
         value: [
-          '>>> 📱 **QR Belépés** — Discord belépés mobil QR kóddal',
-          '🔑 **Token Megadása** — Felhős környezetben (Render) a legstabilabb belépés',
+          '>>> 📱 **QR Belépés** — Discord belépés mobil QR kóddal (vagy `login.bat`)',
           '🔍 **Fiók Info** — Csatlakoztatott profil és aktív küldetésszám',
           '📑 **Fiókjaim Listája** — Elmentett profiljaid megtekintése',
-          '🗑️ **Kijelentkezés** — Fiók és token azonnali törlése az adatbázisból',
+          '🗑️ **Kijelentkezés** — Fiók azonnali törlése az adatbázisból',
         ].join('\n'),
         inline: false,
       },
@@ -151,15 +150,10 @@ export function buildPanelMessage() {
       .setEmoji('📱')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId('btn_manual_token')
-      .setLabel('Token Megadása')
-      .setEmoji('🔑')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
       .setCustomId('btn_check')
       .setLabel('Fiók Info')
       .setEmoji('🔍')
-      .setStyle(ButtonStyle.Secondary),
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('btn_token_list')
       .setLabel('Fiókjaim Listája')
@@ -384,27 +378,10 @@ export async function handlePanelButton(ix) {
     }
   }
 
-  if (id === 'btn_manual_token') {
-    const modal = new ModalBuilder()
-      .setCustomId('modal_token_input')
-      .setTitle('Discord Token Megadása');
-
-    const tokenInput = new TextInputBuilder()
-      .setCustomId('input_user_token')
-      .setLabel('Illeszd be a Discord User Tokenedet:')
-      .setPlaceholder('Illeszd be a Discord felhasználói tokenedet...')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const actionRow = new ActionRowBuilder().addComponents(tokenInput);
-    modal.addComponents(actionRow);
-    return ix.showModal(modal);
-  }
-
   if (id === 'btn_token_list') {
     const tokens = listTokens(uid);
     if (!tokens.length) {
-      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** vagy **🔑 Token Megadása** gombot.`)], flags: MessageFlags.Ephemeral });
+      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** gombot vagy a \`login.bat\`-ot!`)], flags: MessageFlags.Ephemeral });
     }
     const lines = tokens.map(t => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
     return ix.reply({ embeds: [ok('Elmentett Fiókjaid', lines.join('\n'))], flags: MessageFlags.Ephemeral });

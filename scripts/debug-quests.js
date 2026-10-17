@@ -8,7 +8,7 @@ const db = new Database('./data/orbweaver.db', { readonly: true });
 const row = db.prepare('SELECT discord_user_id, label FROM user_tokens LIMIT 1').get();
 db.close();
 
-if (!row) { console.log('No token saved. Run /token add first.'); process.exit(0); }
+if (!row) { console.log('No account saved. Run /login or login.bat first.'); process.exit(0); }
 
 const token = getDecryptedToken(row.discord_user_id, row.label)
   || getDecryptedToken(row.discord_user_id, 'default')

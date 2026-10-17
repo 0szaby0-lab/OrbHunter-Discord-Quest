@@ -10,22 +10,19 @@ import { config } from '../config.js';
 export const commands = [
   new SlashCommandBuilder()
     .setName('login')
-    .setDescription('Log in securely via Discord QR Code or Web (no token copy required)')
-    .addStringOption(o => o.setName('label').setDescription('Label (default: main)')),
+    .setDescription('Biztonságos bejelentkezés Discord QR-kóddal vagy helyi indítóval (nincs token másolás)')
+    .addStringOption(o => o.setName('label').setDescription('Címke (alapértelmezett: main)')),
 
   new SlashCommandBuilder()
     .setName('token')
-    .setDescription('Manage your account authentication')
-    .addSubcommand(s => s.setName('login').setDescription('Log in securely via Discord QR Code or Web')
-      .addStringOption(o => o.setName('label').setDescription('Label (default: main)')))
-    .addSubcommand(s => s.setName('add').setDescription('Save token manually')
-      .addStringOption(o => o.setName('token').setDescription('Discord token').setRequired(true))
-      .addStringOption(o => o.setName('label').setDescription('Label (default: main)')))
-    .addSubcommand(s => s.setName('remove').setDescription('Remove token')
-      .addStringOption(o => o.setName('label').setDescription('Label').setRequired(true)))
-    .addSubcommand(s => s.setName('check').setDescription('Verify token')
-      .addStringOption(o => o.setName('label').setDescription('Label')))
-    .addSubcommand(s => s.setName('list').setDescription('List saved tokens')),
+    .setDescription('Fiókcsatlakozás és hitelesítés kezelése')
+    .addSubcommand(s => s.setName('login').setDescription('Biztonságos bejelentkezés Discord QR-kóddal vagy helyi indítóval')
+      .addStringOption(o => o.setName('label').setDescription('Címke (alapértelmezett: main)')))
+    .addSubcommand(s => s.setName('check').setDescription('Csatlakoztatott fiók ellenőrzése és küldetések lekérése')
+      .addStringOption(o => o.setName('label').setDescription('Címke')))
+    .addSubcommand(s => s.setName('list').setDescription('Csatlakoztatott profilok listája'))
+    .addSubcommand(s => s.setName('remove').setDescription('Fiók leválasztása az adatbázisból')
+      .addStringOption(o => o.setName('label').setDescription('Címke').setRequired(true))),
 ];
 
 export async function handleQrLogin(ix, label = 'main') {
@@ -52,7 +49,7 @@ export async function handleQrLogin(ix, label = 'main') {
         `${E.check()} **${user.global_name || user.username}** fiók elmentve (\`${label}\`)`,
         questCountText,
         '',
-        `🚀 Most már futtathatod: \`/quests all\` vagy \`/quests auto\``,
+        `🚀 Most már futtathatod a vezérlőpulton a **Turbo Start** vagy **Minden Quest** gombot!`,
       ].filter(Boolean).join('\n'));
 
       await ix.editReply({
@@ -67,19 +64,21 @@ export async function handleQrLogin(ix, label = 'main') {
 
   const buttonRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('🌐 Fiók Összekapcsolása (Kattints ide)')
+      .setLabel('🌐 Csatlakozási Oldal Megnyitása')
       .setStyle(ButtonStyle.Link)
       .setURL(connectUrl)
   );
 
-  const embed = ui('OrbHunter — Fiók Csatlakoztatása', [
-    `${E.spark()} **Kapcsold össze a Discord profilodat az OrbHunterrel a weboldalon keresztül!**`,
+  const embed = ui('OrbHunter — Biztonságos QR Csatlakozás', [
+    `${E.spark()} **Csatlakoztasd a Discord fiókodat közvetlenül és biztonságosan!**`,
     '',
-    '👉 **1.** Kattints az alábbi gombra a csatlakozási oldal megnyitásához.',
-    '⚡ **2.** A felületen válaszd az **1-Kattintásos Csatlakozás** gombot, vagy add meg közvetlenül a fiókodat.',
-    '✅ **3.** Az összekapcsolás után a bot automatikusan aktiválja a küldetéseket!',
+    '💻 **Helyi QR Belépés (A legbiztonságosabb és leggyorsabb):**',
+    'Indítsd el a letöltött mappádban a `login.bat` fájlt, és a felugró QR-kódot olvasd be a telefonodon a Discord appal!',
     '',
-    `⏳ *A link 15 percig érvényes.* Mentési címke: \`${label}\``,
+    '🌐 **Webes Útmutató és Valós Idejű Követés:**',
+    'Kattints az alábbi gombra — az oldal élőben mutatja a lépéseket és azonnal zöldre vált, amint beolvasod a kódot.',
+    '',
+    `⏳ *Munkamenet érvényessége: 15 perc.* Címke: \`${label}\``,
   ].join('\n'), config.brand.accent);
 
   await ix.editReply({
@@ -104,25 +103,11 @@ export const handlers = {
       return handleQrLogin(ix, label);
     }
 
-    if (sub === 'add') {
-      await ix.deferReply({ flags: MessageFlags.Ephemeral });
-      const token = ix.options.getString('token');
-      const label = ix.options.getString('label') || 'main';
-      try {
-        const api = new DiscordUserAPI(token);
-        const user = await api.getCurrentUser();
-        saveToken(uid, label, token, { id: user.id, username: user.global_name || user.username });
-        return ix.editReply({ embeds: [ok('Saved', `${E.check()} **${user.global_name || user.username}** → \`${label}\``)] });
-      } catch {
-        return ix.editReply({ embeds: [err('Invalid', `${E.cross()} Token failed auth.`)] });
-      }
-    }
-
     if (sub === 'remove') {
       const label = ix.options.getString('label');
       const removed = removeToken(uid, label);
       return ix.reply({
-        embeds: [removed ? ok('Removed', `${E.check()} \`${label}\``) : warn('Not found', `\`${label}\``)],
+        embeds: [removed ? ok('Eltávolítva', `${E.check()} A(z) \`${label}\` fiók sikeresen le lett választva.`) : warn('Nem található', `Nincs elmentve ilyen címkéjű fiók: \`${label}\``)],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -131,7 +116,7 @@ export const handlers = {
       await ix.deferReply({ flags: MessageFlags.Ephemeral });
       const label = ix.options.getString('label') || 'main';
       const token = getDecryptedToken(uid, label) || getDecryptedToken(uid, 'default');
-      if (!token) return ix.editReply({ embeds: [warn('Missing', `${E.key()} \`/login\` vagy \`/token add\``)] });
+      if (!token) return ix.editReply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nem csatlakoztattál fiókot. Használd a \`/login\` parancsot vagy indítsd el a \`login.bat\`-ot!`)] });
 
       try {
         const api = new DiscordUserAPI(token);
@@ -139,22 +124,22 @@ export const handlers = {
         const quests = parseAllQuests(await api.fetchAllQuests());
         const active = quests.filter(q => !q.completed).length;
         return ix.editReply({
-          embeds: [ok('Valid', [
-            `${E.check()} **${user.global_name || user.username}**`,
-            `${E.radar()} **${active}** quest(s) found`,
-            `${E.key()} \`${maskToken(token)}\``,
+          embeds: [ok('Érvényes Fiók', [
+            `${E.check()} Felhasználó: **${user.global_name || user.username}**`,
+            `${E.radar()} **${active}** aktív küldetés elérhető`,
+            `${E.key()} Állapot: Csatlakoztatva és aktív`,
           ].join('\n'))],
         });
       } catch {
-        return ix.editReply({ embeds: [err('Dead', `${E.skull()} Token expired.`)] });
+        return ix.editReply({ embeds: [err('Lejárt', `${E.skull()} A munkamenet lejárt. Kérlek jelentkezz be újra a \`/login\` paranccsal vagy a \`login.bat\`-tal.`)] });
       }
     }
 
     if (sub === 'list') {
       const tokens = listTokens(uid);
-      if (!tokens.length) return ix.reply({ embeds: [warn('Empty', `${E.key()} \`/login\` vagy \`/token add\``)], flags: MessageFlags.Ephemeral });
+      if (!tokens.length) return ix.reply({ embeds: [warn('Üres', `${E.key()} Még nincs csatlakoztatott fiókod. Használd a \`/login\` parancsot vagy a \`login.bat\`-ot!`)], flags: MessageFlags.Ephemeral });
       const lines = tokens.map((t, i) => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
-      return ix.reply({ embeds: [ok('Tokens', lines.join('\n'))], flags: MessageFlags.Ephemeral });
+      return ix.reply({ embeds: [ok('Csatlakoztatott Fiókok', lines.join('\n'))], flags: MessageFlags.Ephemeral });
     }
   },
 };

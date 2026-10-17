@@ -57,34 +57,28 @@ npm run upload-emojis
 
 This writes `data/emoji-map.json` (gitignored) with the Discord emoji IDs.
 
-## Two different tokens
+## Authentication & Setup
 
-Orbweaver uses **two** tokens — don't mix them up:
+OrbHunter connects to your Discord account seamlessly and securely:
 
-| Token | Where it goes | Purpose |
-|-------|---------------|---------|
-| **Bot token** | `.env` → `DISCORD_BOT_TOKEN` | Powers the slash-command bot |
-| **User token** | `/token add` in Discord | Reads and completes quests on your account |
+| Method | Where it runs | Security & Reliability |
+|--------|---------------|------------------------|
+| **Local QR Login (`login.bat`)** | Your PC (Home IP) | **100% Safe:** Uses Discord's official Remote Auth Gateway from your home network. Zero captcha, zero risk. |
+| **Discord `/login` command** | Discord / Web | Generates a 1-click web connect page that monitors authentication live. |
 
-Quest APIs only work with a **user** token. If `/quests list` is empty but your
-token is valid, you probably saved the bot token by mistake.
-
-> **How to get your user token:** This is sensitive — never share it. Use your
-> browser's developer tools on Discord (Network tab → any API request →
-> `Authorization` header). Orbweaver encrypts it locally and never logs it.
+> **No manual token copying:** You never need to open browser DevTools, inspect network traffic, or copy sensitive tokens manually. Simply scan the QR code using your Discord mobile app!
 
 ## Commands
 
-### Authentication & Token
+### Authentication & Account
 
 | Command | Description |
 |---------|-------------|
-| `/login` | **Recommended:** Log in securely via Discord QR Code (no manual token needed) |
+| `/login` | **Recommended:** Log in securely via Discord QR Code or local `login.bat` |
 | `/token login` | Same as `/login` (optional `label`, default `main`) |
-| `/token add` | Save your Discord user token manually (fallback) |
-| `/token check` | Verify a token and show how many quests were found |
-| `/token list` | List saved token labels |
-| `/token remove` | Remove a saved token |
+| `/token check` | Verify connected account and show active quests |
+| `/token list` | List connected account labels |
+| `/token remove` | Remove a connected account from the database |
 
 ### Quests
 
@@ -149,7 +143,7 @@ captcha blocked it.
 
 **`/quests list` shows nothing**
 
-1. Confirm `/token add` used your **user** token, not the bot token.
+1. Confirm your Discord account was connected via `/login` or `login.bat`.
 2. Run the diagnostic script:
 
    ```bash
