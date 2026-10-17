@@ -122,7 +122,7 @@ export async function handleQrLogin(ix, label = 'main') {
       '',
       `⏳ *A link 5 percig érvényes.*`,
       '',
-      `💡 *Tipp: Állítsd be a \\`CAPSOLVER_API_KEY\\` env változót az automatikus megoldáshoz!*`,
+      '💡 *Tipp: Állítsd be a CAPSOLVER_API_KEY env változót az automatikus megoldáshoz!*',
     ].join('\n'), '#f0b232');
 
     await ix.editReply({
