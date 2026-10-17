@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch --watch-path=src src/index.js",
     "deploy": "node src/deploy-commands.js",
-    "upload-emojis": "node src/upload-emojis.js"
+    "upload-emojis": "node src/upload-emojis.js",
+    "login": "node scripts/local-login.js"
   },
   "keywords": [
     "discord",

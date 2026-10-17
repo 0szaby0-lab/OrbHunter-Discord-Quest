@@ -453,5 +453,59 @@ export async function handleConnectRequest(req, res) {
     return true;
   }
 
+  // Route 3: POST /api/auth/sync (Direct sync from local login)
+  if (req.method === 'POST' && url.pathname === '/api/auth/sync') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { secret, uid, label, token } = JSON.parse(body);
+
+        const expectedSecret = process.env.ENCRYPTION_KEY;
+        if (!expectedSecret || secret !== expectedSecret) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Érvénytelen szinkronizációs kulcs.' }));
+          return;
+        }
+
+        if (!token || !token.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Hiányzó token.' }));
+          return;
+        }
+
+        const cleanToken = token.trim().replace(/^"(.*)"$/, '$1');
+        const api = new DiscordUserAPI(cleanToken);
+        const user = await api.getCurrentUser();
+
+        const targetUid = uid || process.env.OWNER_ID || user.id;
+        const targetLabel = label || 'main';
+        const savedUsername = user.global_name || user.username;
+
+        saveToken(targetUid, targetLabel, cleanToken, {
+          id: user.id,
+          username: savedUsername,
+        });
+
+        console.log(`[WebLinker] ✅ Helyi QR szinkronizáció sikeres: ${savedUsername} (${user.id}) elmentve!`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          username: savedUsername,
+          userId: user.id,
+        }));
+      } catch (err) {
+        console.error('[WebLinker] Sync error:', err.message);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          error: err.message,
+        }));
+      }
+    });
+    return true;
+  }
+
   return false;
 }
