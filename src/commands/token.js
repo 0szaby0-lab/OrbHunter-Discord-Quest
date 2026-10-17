@@ -73,6 +73,20 @@ export async function handleQrLogin(ix, label = 'main') {
     }).catch(() => {});
   });
 
+  session.on('captcha_status', async ({ tier, message }) => {
+    const embed = ui('🤖 Automatikus Captcha Megoldás', [
+      `${E.spark()} **Tier ${tier}:** ${message}`,
+      '',
+      '⏳ *Ez akár 30-60 másodpercig is tarthat. Kérlek várj...*',
+    ].join('\n'), '#f0b232');
+
+    await ix.editReply({
+      embeds: [embed],
+      files: [],
+      components: [],
+    }).catch(() => {});
+  });
+
   session.on('captcha_required', async ({ sitekey, rqdata, rqtoken, solve }) => {
     const sessionId = createCaptchaSession({
       sitekey,
@@ -100,13 +114,15 @@ export async function handleQrLogin(ix, label = 'main') {
         .setURL(solveUrl)
     );
 
-    const embed = ui('Discord Biztonsági Ellenőrzés (hCaptcha)', [
-      `${E.warn()} **A Discord felhős IP-ről biztonsági ellenőrzést kér.**`,
+    const embed = ui('Discord Biztonsági Ellenőrzés — Manuális Feloldás', [
+      `${E.warn()} **A Discord captchát kér, és az automatikus megoldás nem elérhető vagy sikertelen volt.**`,
       '',
-      '👉 **Kattints az alábbi gombra, és pipáld ki a captchát a böngésződben (1 kattintás)!**',
-      '✅ Amint a böngészőben feloldottad, a bot azonnal befejezi a bejelentkezést és elmenti a fiókodat.',
+      '👉 **Kattints az alábbi gombra, és old meg a captchát a böngésződben!**',
+      '✅ A megoldás után a bot automatikusan befejezi a bejelentkezést.',
       '',
       `⏳ *A link 5 percig érvényes.*`,
+      '',
+      `💡 *Tipp: Állítsd be a \\`CAPSOLVER_API_KEY\\` env változót az automatikus megoldáshoz!*`,
     ].join('\n'), '#f0b232');
 
     await ix.editReply({

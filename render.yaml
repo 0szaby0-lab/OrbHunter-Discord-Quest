@@ -16,3 +16,7 @@ services:
         sync: false
       - key: OWNER_ID
         sync: false
+      - key: LOGIN_PROXY
+        sync: false
+      - key: CAPSOLVER_API_KEY
+        sync: false

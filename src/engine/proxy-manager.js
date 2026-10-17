@@ -1,4 +1,5 @@
 import { ProxyAgent } from 'undici';
+import { isWarpReady, getWarpProxyUrl } from './warp-manager.js';
 
 const PROXY_SOURCES = [
   'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=4000&country=all&ssl=yes&anonymity=elite',
@@ -124,12 +125,22 @@ export class ProxyManager {
   }
 
   async getLoginProxy() {
-    // Only use proxy if explicitly provided in environment
+    // Priority 1: Explicit environment proxy
     const configured = this.getConfiguredProxy();
     if (configured) {
+      console.log(`[ProxyManager] 🔧 Using configured proxy: ${configured}`);
       return configured;
     }
-    // Direct connection without proxy
+
+    // Priority 2: Cloudflare WARP (free, residential IP)
+    if (isWarpReady()) {
+      const warpProxy = getWarpProxyUrl();
+      console.log(`[ProxyManager] 🌐 Using Cloudflare WARP proxy: ${warpProxy}`);
+      return warpProxy;
+    }
+
+    // Priority 3: Direct connection (may trigger captcha on datacenter IPs)
+    console.log('[ProxyManager] ⚡ No proxy available, using direct connection.');
     return null;
   }
 }

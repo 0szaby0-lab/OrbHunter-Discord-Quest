@@ -4,6 +4,16 @@ import https from 'https';
 import WebSocket from 'ws';
 import QRCode from 'qrcode';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import { hasCaptchaSolver, solveCaptcha } from './captcha-solver.js';
+
+function createProxyAgent(proxyUrl) {
+  if (!proxyUrl) return null;
+  if (proxyUrl.startsWith('socks5://') || proxyUrl.startsWith('socks4://') || proxyUrl.startsWith('socks://')) {
+    return new SocksProxyAgent(proxyUrl);
+  }
+  return new HttpsProxyAgent(proxyUrl);
+}
 
 const GATEWAY_URL = 'wss://remote-auth-gateway.discord.gg/?v=2';
 const API_LOGIN_URL = 'https://discord.com/api/v9/users/@me/remote-auth/login';
@@ -70,7 +80,7 @@ function sendPostJson(urlStr, data, proxyUrl, extraHeaders = {}) {
 
     if (proxyUrl) {
       try {
-        options.agent = new HttpsProxyAgent(proxyUrl);
+        options.agent = createProxyAgent(proxyUrl);
       } catch (err) {
         console.warn(`[RemoteAuth] Failed to configure HttpsProxyAgent for login: ${err.message}`);
       }
@@ -123,7 +133,7 @@ export class RemoteAuthSession extends EventEmitter {
 
     if (this.proxyUrl) {
       try {
-        wsOptions.agent = new HttpsProxyAgent(this.proxyUrl);
+        wsOptions.agent = createProxyAgent(this.proxyUrl);
         console.log(`[RemoteAuth] Routing gateway WebSocket through proxy: ${this.proxyUrl}`);
       } catch (err) {
         console.warn(`[RemoteAuth] Failed to configure HttpsProxyAgent: ${err.message}`);
@@ -264,64 +274,48 @@ export class RemoteAuthSession extends EventEmitter {
           try { json = JSON.parse(errText); } catch {}
 
           if (json && json.captcha_key && json.captcha_key.includes('captcha-required')) {
-            console.log('[RemoteAuth] 🧩 Captcha required by Discord. Emitting captcha_required event...');
+            console.log('[RemoteAuth] 🧩 Captcha required by Discord.');
+
+            // ────────────────────────────────────────────
+            // TIER 1: Automatic solver (CapSolver / 2Captcha)
+            // ────────────────────────────────────────────
+            if (hasCaptchaSolver()) {
+              console.log('[RemoteAuth] 🤖 Tier 1: Attempting automatic captcha solve...');
+              this.emit('captcha_status', { tier: 1, message: 'Automatikus captcha megoldás folyamatban (CapSolver)...' });
+
+              try {
+                const solvedToken = await solveCaptcha({
+                  sitekey: json.captcha_sitekey,
+                  rqdata: json.captcha_rqdata,
+                  pageUrl: 'https://discord.com/login',
+                  userAgent: DESKTOP_UA,
+                });
+
+                console.log('[RemoteAuth] ✅ Tier 1 solved. Submitting to Discord...');
+                const success = await this._submitCaptchaToken(ticket, solvedToken, json, res.cookies);
+                if (success) return;
+                // If submission failed, fall through to next tier
+                console.log('[RemoteAuth] ⚠️ Tier 1 token rejected. Falling through...');
+              } catch (solverErr) {
+                console.error('[RemoteAuth] ⚠️ Tier 1 failed:', solverErr.message);
+              }
+            }
+
+            // ────────────────────────────────────────────
+            // TIER 2/3: Browser relay (manual solve)
+            // Emits captcha_required so the command handler
+            // can show the relay link to the user.
+            // ────────────────────────────────────────────
+            console.log('[RemoteAuth] 🌐 Falling back to browser relay (manual solve)...');
             this.emit('captcha_required', {
               sitekey: json.captcha_sitekey,
               rqdata: json.captcha_rqdata,
               rqtoken: json.captcha_rqtoken,
               sessionId: json.captcha_session_id,
               ticket,
+              cookies: res.cookies,
               solve: async (captchaKey) => {
-                console.log(`[RemoteAuth] Submitting solved captcha_key to Discord...`);
-
-                const retryHeaders = {
-                  'X-Captcha-Key': captchaKey,
-                };
-                if (json.captcha_rqtoken) {
-                  retryHeaders['X-Captcha-Rqtoken'] = json.captcha_rqtoken;
-                }
-                if (json.captcha_session_id) {
-                  retryHeaders['X-Captcha-Session-Id'] = json.captcha_session_id;
-                }
-                if (res.cookies) {
-                  retryHeaders['Cookie'] = res.cookies;
-                }
-
-                const retryBody = {
-                  ticket,
-                  captcha_key: captchaKey,
-                };
-                if (json.captcha_rqtoken) {
-                  retryBody.captcha_rqtoken = json.captcha_rqtoken;
-                }
-                if (json.captcha_session_id) {
-                  retryBody.captcha_session_id = json.captcha_session_id;
-                }
-
-                console.log('[RemoteAuth] Sending captcha headers:', Object.keys(retryHeaders));
-                const retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
-
-                if (!retryRes.ok) {
-                  const retryErr = await retryRes.text();
-                  throw new Error(`Captcha jóváhagyása sikertelen (${retryRes.status}): ${retryErr}`);
-                }
-
-                const retryData = await retryRes.json();
-                if (!retryData.encrypted_token) {
-                  throw new Error('Encrypted token hiányzik a captcha válaszból.');
-                }
-
-                const decryptedToken = crypto.privateDecrypt(
-                  {
-                    key: this.keyPair.privateKey,
-                    oaepHash: 'sha256',
-                  },
-                  Buffer.from(retryData.encrypted_token, 'base64')
-                ).toString('utf-8');
-
-                this.emit('finish', { token: decryptedToken });
-                this.cleanup();
-                return true;
+                return this._submitCaptchaToken(ticket, captchaKey, json, res.cookies);
               },
             });
             return;
@@ -357,6 +351,53 @@ export class RemoteAuthSession extends EventEmitter {
       default:
         break;
     }
+  }
+
+  /**
+   * Submit a solved captcha token to Discord's remote-auth/login endpoint.
+   * Returns true if login succeeded and 'finish' event was emitted.
+   */
+  async _submitCaptchaToken(ticket, captchaKey, captchaJson, cookies) {
+    console.log(`[RemoteAuth] Submitting solved captcha_key to Discord...`);
+
+    const retryBody = {
+      ticket,
+      captcha_key: captchaKey,
+    };
+    if (captchaJson.captcha_rqtoken) {
+      retryBody.captcha_rqtoken = captchaJson.captcha_rqtoken;
+    }
+
+    const retryHeaders = {};
+    if (cookies) {
+      retryHeaders['Cookie'] = cookies;
+    }
+
+    const retryRes = await sendPostJson(API_LOGIN_URL, retryBody, this.proxyUrl, retryHeaders);
+
+    if (!retryRes.ok) {
+      const retryErr = await retryRes.text();
+      const msg = `Captcha jóváhagyása sikertelen (${retryRes.status}): ${retryErr}`;
+      console.error(`[RemoteAuth] ❌ ${msg}`);
+      throw new Error(msg);
+    }
+
+    const retryData = await retryRes.json();
+    if (!retryData.encrypted_token) {
+      throw new Error('Encrypted token hiányzik a captcha válaszból.');
+    }
+
+    const decryptedToken = crypto.privateDecrypt(
+      {
+        key: this.keyPair.privateKey,
+        oaepHash: 'sha256',
+      },
+      Buffer.from(retryData.encrypted_token, 'base64')
+    ).toString('utf-8');
+
+    this.emit('finish', { token: decryptedToken });
+    this.cleanup();
+    return true;
   }
 
   cleanup() {

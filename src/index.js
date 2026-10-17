@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { registerCommands, syncGuildCommands } from './register-commands.js';
 import { loadEmojiMap } from './utils/emojis.js';
 import { handleCaptchaRequest } from './server/captcha-relay.js';
+import { startWarp } from './engine/warp-manager.js';
 
 // Render.com Web Service HTTP health check & Captcha Relay
 const PORT = process.env.PORT || 10000;
@@ -30,6 +31,17 @@ http.createServer(async (req, res) => {
 
 loadEmojiMap();
 console.log('Starting…');
+
+// Start Cloudflare WARP proxy (free residential IP masking)
+startWarp().then(ok => {
+  if (ok) {
+    console.log('🌐 Cloudflare WARP aktív — residential IP a Discord felé');
+  } else {
+    console.log('⚡ WARP nem elérhető — közvetlen kapcsolat vagy konfigurált proxy');
+  }
+}).catch(err => {
+  console.warn('⚠️  WARP indítás hiba (nem kritikus):', err.message);
+});
 
 const rest = new REST({ version: '10' }).setToken(config.botToken);
 
