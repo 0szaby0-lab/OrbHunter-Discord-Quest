@@ -16,7 +16,11 @@ cd "$WARP_DIR"
 # ── Download wgcf if missing ──
 if [ ! -f "$WARP_DIR/wgcf" ]; then
   echo "[WARP] ⬇️  Downloading wgcf..."
-  curl -fsSL -o "$WARP_DIR/wgcf" "https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_linux_amd64"
+  WGCF_DOWNLOAD_URL=$(curl -fsSL "https://api.github.com/repos/ViRb3/wgcf/releases/latest" | grep -o '"browser_download_url":"[^"]*linux_amd64"' | head -1 | cut -d'"' -f4 || true)
+  if [ -z "$WGCF_DOWNLOAD_URL" ]; then
+    WGCF_DOWNLOAD_URL="https://github.com/ViRb3/wgcf/releases/download/v2.3.1/wgcf_2.3.1_linux_amd64"
+  fi
+  curl -fsSL -o "$WARP_DIR/wgcf" "$WGCF_DOWNLOAD_URL"
   chmod +x "$WARP_DIR/wgcf"
 fi
 

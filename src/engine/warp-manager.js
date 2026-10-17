@@ -8,7 +8,6 @@ import path from 'path';
 
 const WARP_DIR = process.env.WARP_DIR || '/tmp/warp';
 const WIREPROXY_PORT = parseInt(process.env.WIREPROXY_PORT || '1080', 10);
-const WGCF_URL = 'https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_linux_amd64';
 
 let wireproxyProcess = null;
 let warpReady = false;
@@ -23,21 +22,42 @@ function downloadBinary(url, dest) {
   execSync(`chmod +x "${dest}"`, { stdio: 'pipe' });
 }
 
+async function getWgcfUrl() {
+  try {
+    const res = await fetch('https://api.github.com/repos/ViRb3/wgcf/releases/latest', {
+      headers: { 'User-Agent': 'OrbHunter' },
+    });
+    const data = await res.json();
+    const asset = data.assets?.find(a => a.name && a.name.includes('linux_amd64') && !a.name.endsWith('.exe'));
+    if (asset?.browser_download_url) {
+      return asset.browser_download_url;
+    }
+  } catch (err) {
+    console.warn('[WARP] Could not fetch latest wgcf metadata:', err.message);
+  }
+  return 'https://github.com/ViRb3/wgcf/releases/download/v2.3.1/wgcf_2.3.1_linux_amd64';
+}
+
 async function getWireproxyUrl() {
   try {
-    const res = await fetch('https://api.github.com/repos/octeep/wireproxy/releases/latest');
+    const res = await fetch('https://api.github.com/repos/octeep/wireproxy/releases/latest', {
+      headers: { 'User-Agent': 'OrbHunter' },
+    });
     const data = await res.json();
-    const tag = data.tag_name || 'v1.0.9';
-    return {
-      tag,
-      url: `https://github.com/octeep/wireproxy/releases/download/${tag}/wireproxy_linux_amd64.tar.gz`,
-    };
-  } catch {
-    return {
-      tag: 'v1.0.9',
-      url: 'https://github.com/octeep/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz',
-    };
+    const asset = data.assets?.find(a => a.name && a.name.includes('linux_amd64.tar.gz'));
+    if (asset?.browser_download_url) {
+      return {
+        tag: data.tag_name || 'latest',
+        url: asset.browser_download_url,
+      };
+    }
+  } catch (err) {
+    console.warn('[WARP] Could not fetch latest wireproxy metadata:', err.message);
   }
+  return {
+    tag: 'v1.1.3',
+    url: 'https://github.com/windtf/wireproxy/releases/download/v1.1.3/wireproxy_linux_amd64.tar.gz',
+  };
 }
 
 function parseWgcfProfile(profilePath) {
@@ -91,7 +111,8 @@ export async function startWarp() {
 
     // Download wgcf
     if (!existsSync(wgcfPath)) {
-      downloadBinary(WGCF_URL, wgcfPath);
+      const wgcfUrl = await getWgcfUrl();
+      downloadBinary(wgcfUrl, wgcfPath);
     }
 
     // Download wireproxy
