@@ -50,22 +50,21 @@ export function renderConnectPage(session) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OrbHunter — Discord Bejelentkezés</title>
+  <title>OrbHunter — Biztonságos QR Csatlakozás</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #0b0e14;
-      --card-bg: rgba(22, 27, 34, 0.9);
-      --border: rgba(88, 101, 242, 0.32);
+      --card-bg: rgba(22, 27, 34, 0.92);
+      --border: rgba(88, 101, 242, 0.35);
       --accent: #5865f2;
       --accent-glow: rgba(88, 101, 242, 0.5);
       --accent-pink: #eb459e;
       --text: #f2f3f5;
       --text-muted: #949ba4;
       --success: #23a55a;
-      --error: #ed4245;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -84,9 +83,9 @@ export function renderConnectPage(session) {
       border: 1px solid var(--border);
       box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7), 0 0 40px var(--accent-glow);
       border-radius: 24px;
-      padding: 44px 36px;
+      padding: 40px 32px;
       width: 100%;
-      max-width: 440px;
+      max-width: 460px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -108,13 +107,13 @@ export function renderConnectPage(session) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 64px;
-      height: 64px;
+      width: 68px;
+      height: 68px;
       border-radius: 20px;
       background: rgba(88, 101, 242, 0.16);
       border: 1px solid rgba(88, 101, 242, 0.35);
-      font-size: 32px;
-      margin-bottom: 20px;
+      font-size: 34px;
+      margin-bottom: 18px;
     }
     h1 {
       font-size: 24px;
@@ -126,256 +125,183 @@ export function renderConnectPage(session) {
       font-size: 14px;
       color: var(--text-muted);
       line-height: 1.5;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
-    .form-group {
+    .steps-container {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
       text-align: left;
+      margin-bottom: 24px;
     }
-    .input-label {
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      display: block;
+    .step-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      transition: border-color 0.2s;
     }
-    .input-wrap {
-      position: relative;
+    .step-box:hover {
+      border-color: rgba(88, 101, 242, 0.4);
     }
-    .input-field {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 12px;
-      padding: 13px 16px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 15px;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .input-field:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.3);
-    }
-    .eye-btn {
-      position: absolute;
-      right: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 18px;
-      padding: 4px;
-    }
-    .submit-btn {
-      width: 100%;
-      background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
       color: #fff;
-      font-family: inherit;
-      font-size: 16px;
-      font-weight: 600;
-      border: none;
-      border-radius: 12px;
-      padding: 14px 20px;
-      cursor: pointer;
-      margin-top: 10px;
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-      box-shadow: 0 6px 20px rgba(88, 101, 242, 0.4);
+      font-weight: 700;
+      font-size: 13px;
+      flex-shrink: 0;
+      margin-top: 2px;
     }
-    .submit-btn:hover {
-      box-shadow: 0 8px 24px rgba(88, 101, 242, 0.55);
-    }
-    .submit-btn:active {
-      transform: scale(0.98);
-    }
-    .submit-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .status-msg {
-      margin-top: 20px;
+    .step-content h3 {
       font-size: 14px;
-      border-radius: 12px;
-      padding: 14px;
-      line-height: 1.5;
-      display: none;
-      text-align: left;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
     }
-    .status-msg.success {
-      display: block;
-      background: rgba(35, 165, 90, 0.16);
-      border: 1px solid var(--success);
-      color: #57f287;
-    }
-    .status-msg.error {
-      display: block;
-      background: rgba(237, 66, 69, 0.16);
-      border: 1px solid var(--error);
-      color: #ff7b72;
-    }
-    .footer-note {
-      margin-top: 26px;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.35);
+    .step-content p {
+      font-size: 12.5px;
+      color: var(--text-muted);
       line-height: 1.4;
     }
-    #mfaSection {
+    .step-code {
+      display: inline-block;
+      background: rgba(88, 101, 242, 0.2);
+      border: 1px solid rgba(88, 101, 242, 0.4);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #fff;
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .pulse-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(88, 101, 242, 0.12);
+      border: 1px solid rgba(88, 101, 242, 0.28);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-top: 10px;
+      font-size: 13.5px;
+      color: #cfd3ff;
+      font-weight: 500;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulseAnim 1.8s ease-in-out infinite;
+    }
+    @keyframes pulseAnim {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+    .success-box {
       display: none;
+      background: rgba(35, 165, 90, 0.16);
+      border: 1px solid var(--success);
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 16px;
+      text-align: center;
+    }
+    .success-box h2 {
+      font-size: 20px;
+      color: #57f287;
+      margin-bottom: 8px;
+    }
+    .success-box p {
+      font-size: 14px;
+      color: #dbdee1;
+      line-height: 1.5;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.38);
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="badge-icon">🎮</div>
-    <h1>OrbHunter Discord Belépés</h1>
-    <p class="subtitle">Jelentkezz be a fiókoddal az automatikus küldetéskezelő aktiválásához.</p>
+    <div class="badge-icon">⚡</div>
+    <h1>OrbHunter QR Csatlakozás</h1>
+    <p class="subtitle">A Discord védelmi rendszere miatt a belépés közvetlenül a saját otthoni internetedről történik (100% biztonságos, nincs captcha).</p>
 
-    <!-- Step 1: Email & Password -->
-    <form id="loginForm" class="form-group" onsubmit="handleLoginSubmit(event)">
-      <div>
-        <label class="input-label" for="loginEmail">E-mail cím vagy telefonszám</label>
-        <div class="input-wrap">
-          <input type="text" id="loginEmail" class="input-field" placeholder="pelda@email.com" autocomplete="username" required>
+    <div id="stepsArea">
+      <div class="steps-container">
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>Indítsd el a gépeden</h3>
+            <p>A letöltött mappádban kattints duplán a <span class="step-code">login.bat</span> fájlra (vagy írd be a terminálba: <span class="step-code">.\\login.bat</span>).</p>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>Olvasd be a telefonoddal</h3>
+            <p>Felugrik a hivatalos Discord QR-kód. A mobilappban nyisd meg a <b>Profil ➔ QR-kód beolvasása</b> menüt.</p>
+          </div>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>Hagyd jóvá a belépést</h3>
+            <p>Koppints az <b>"Igen, bejelentkezem"</b> gombra. A fiókod azonnal összekapcsolódik a felhővel!</p>
+          </div>
         </div>
       </div>
 
-      <div>
-        <label class="input-label" for="loginPassword">Jelszó</label>
-        <div class="input-wrap">
-          <input type="password" id="loginPassword" class="input-field" placeholder="••••••••••••" autocomplete="current-password" required>
-          <button type="button" class="eye-btn" onclick="togglePasswordEye()">👁️</button>
-        </div>
+      <div class="pulse-status" id="waitingStatus">
+        <div class="pulse-dot"></div>
+        <span>Várakozás a helyi QR-kód jóváhagyására...</span>
       </div>
+    </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn">🔒 Bejelentkezés</button>
-    </form>
+    <div class="success-box" id="successArea">
+      <div style="font-size: 40px; margin-bottom: 12px;">🎉</div>
+      <h2 id="successUser">Sikeres Csatlakozás!</h2>
+      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br>A bot a háttérben mostantól automatikusan csinálja a küldetéseidet. Visszatérhetsz a Discordba!</p>
+    </div>
 
-    <!-- Step 2: 2FA / TOTP (Shown if account has MFA) -->
-    <form id="mfaForm" class="form-group" onsubmit="handleMfaSubmit(event)" style="display: none;">
-      <div style="background: rgba(88, 101, 242, 0.1); border: 1px solid rgba(88, 101, 242, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 8px;">
-        <p style="font-size: 13px; color: var(--text);">🔐 <b>Kétlépcsős azonosítás (2FA) szükséges</b><br><span style="color: var(--text-muted); font-size: 12px;">Nyisd meg a hitelesítő appodat (Authy, Google Authenticator) vagy az SMS-eidet, és írd be a 6 jegyű kódot:</span></p>
-      </div>
-
-      <div>
-        <label class="input-label" for="mfaCode">6 jegyű hitelesítő kód</label>
-        <div class="input-wrap">
-          <input type="text" id="mfaCode" class="input-field" placeholder="123456" maxlength="8" autocomplete="one-time-code" required>
-        </div>
-      </div>
-
-      <button type="submit" id="mfaSubmitBtn" class="submit-btn" style="background: #23a55a;">✅ Kód Megerősítése</button>
-    </form>
-
-    <div id="statusMsg" class="status-msg"></div>
-
-    <p class="footer-note">🔒 Biztonságos kapcsolat • Az adataid AES-256 titkosítással védve a saját szervereden tárolódnak.</p>
+    <p class="footer-note">🔒 Saját IP hitelesítés • Az adataid AES-256 titkosítással védve a felhőben tárolódnak.</p>
   </div>
 
   <script>
-    var currentTicket = null;
-
-    function togglePasswordEye() {
-      var input = document.getElementById('loginPassword');
-      input.type = input.type === 'password' ? 'text' : 'password';
-    }
-
-    function handleLoginSubmit(e) {
-      e.preventDefault();
-      var email = document.getElementById('loginEmail').value.trim();
-      var password = document.getElementById('loginPassword').value;
-      var btn = document.getElementById('submitBtn');
-      var status = document.getElementById('statusMsg');
-
-      if (!email || !password) return;
-
-      btn.disabled = true;
-      btn.innerText = 'Bejelentkezés folyamatban...';
-      status.style.display = 'none';
-
-      fetch('/api/connect/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: '${session.id}',
-          email: email,
-          password: password
+    var sessionId = '${session.id}';
+    var checkInterval = setInterval(function() {
+      fetch('/api/connect/status?id=' + encodeURIComponent(sessionId))
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.linked) {
+            clearInterval(checkInterval);
+            document.getElementById('stepsArea').style.display = 'none';
+            var succ = document.getElementById('successArea');
+            succ.style.display = 'block';
+            if (res.username) {
+              document.getElementById('successUser').innerText = 'Üdv, ' + res.username + '!';
+            }
+          }
         })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (res.success) {
-          document.getElementById('loginForm').style.display = 'none';
-          status.className = 'status-msg success';
-          status.innerHTML = '🎉 <b>Sikeres bejelentkezés!</b><br>Üdvözöllek, <b>' + (res.username || 'Felhasználó') + '</b>!<br>A fiókod sikeresen csatlakoztatva lett az OrbHunterhez. Visszatérhetsz a Discordba!';
-        } else if (res.mfa) {
-          // Show 2FA form
-          currentTicket = res.ticket;
-          document.getElementById('loginForm').style.display = 'none';
-          document.getElementById('mfaForm').style.display = 'flex';
-          setTimeout(function() { document.getElementById('mfaCode').focus(); }, 100);
-        } else {
-          status.className = 'status-msg error';
-          status.innerHTML = '❌ <b>Hiba:</b> ' + (res.error || 'Hibás e-mail vagy jelszó.');
-          btn.disabled = false;
-          btn.innerText = '🔒 Bejelentkezés';
-        }
-      })
-      .catch(function(err) {
-        status.className = 'status-msg error';
-        status.innerHTML = '❌ <b>Hálózati hiba:</b> ' + err.message;
-        btn.disabled = false;
-        btn.innerText = '🔒 Bejelentkezés';
-      });
-    }
-
-    function handleMfaSubmit(e) {
-      e.preventDefault();
-      var code = document.getElementById('mfaCode').value.trim();
-      var btn = document.getElementById('mfaSubmitBtn');
-      var status = document.getElementById('statusMsg');
-
-      if (!code || !currentTicket) return;
-
-      btn.disabled = true;
-      btn.innerText = 'Ellenőrzés...';
-      status.style.display = 'none';
-
-      fetch('/api/connect/mfa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: '${session.id}',
-          ticket: currentTicket,
-          code: code
-        })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (res.success) {
-          document.getElementById('mfaForm').style.display = 'none';
-          status.className = 'status-msg success';
-          status.innerHTML = '🎉 <b>Sikeres bejelentkezés!</b><br>Üdvözöllek, <b>' + (res.username || 'Felhasználó') + '</b>!<br>A fiókod sikeresen csatlakoztatva lett az OrbHunterhez. Visszatérhetsz a Discordba!';
-        } else {
-          status.className = 'status-msg error';
-          status.innerHTML = '❌ <b>Hiba:</b> ' + (res.error || 'Érvénytelen 2FA kód.');
-          btn.disabled = false;
-          btn.innerText = '✅ Kód Megerősítése';
-        }
-      })
-      .catch(function(err) {
-        status.className = 'status-msg error';
-        status.innerHTML = '❌ <b>Hálózati hiba:</b> ' + err.message;
-        btn.disabled = false;
-        btn.innerText = '✅ Kód Megerősítése';
-      });
-    }
+        .catch(function() {});
+    }, 2000);
   </script>
 </body>
 </html>`;
@@ -402,185 +328,24 @@ export async function handleConnectRequest(req, res) {
     return true;
   }
 
-  // Route 2: POST /api/connect/login (Discord Email + Password authentication)
-  if (req.method === 'POST' && url.pathname === '/api/connect/login') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const { id, email, password } = JSON.parse(body);
-        const session = getConnectSession(id);
-        if (!session) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'A munkamenet lejárt. Kérj új linket a /login paranccsal.' }));
-          return;
-        }
+  // Route 2: GET /api/connect/status?id=... (Live status polling)
+  if (req.method === 'GET' && url.pathname === '/api/connect/status') {
+    const id = url.searchParams.get('id');
+    const session = getConnectSession(id);
+    if (!session) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ linked: false, expired: true }));
+      return true;
+    }
 
-        if (!email || !password) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'E-mail és jelszó megadása kötelező.' }));
-          return;
-        }
-
-        // Send login to Discord API
-        const discordRes = await fetch('https://discord.com/api/v9/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': BROWSER_UA,
-          },
-          body: JSON.stringify({
-            login: email.trim(),
-            password: password,
-            undelete: false,
-            login_source: null,
-            gift_code_sku_id: null,
-          }),
-        });
-
-        const data = await discordRes.json();
-
-        // Case 1: MFA required
-        if (data.mfa && data.ticket) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            success: false,
-            mfa: true,
-            ticket: data.ticket,
-          }));
-          return;
-        }
-
-        // Case 2: Direct success (token returned)
-        if (data.token) {
-          const api = new DiscordUserAPI(data.token);
-          const user = await api.getCurrentUser();
-          const savedUsername = user.global_name || user.username;
-
-          saveToken(session.uid, session.label || 'main', data.token, {
-            id: user.id,
-            username: savedUsername,
-          });
-
-          if (typeof session.onLinked === 'function') {
-            try {
-              await session.onLinked({ user, token: data.token });
-            } catch (e) {
-              console.warn('[WebLinker] onLinked error:', e.message);
-            }
-          }
-
-          activeConnectSessions.delete(id);
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            success: true,
-            username: savedUsername,
-          }));
-          return;
-        }
-
-        // Case 3: Error from Discord
-        const errMsg = data.message || (data.errors ? JSON.stringify(data.errors) : 'Hibás e-mail vagy jelszó.');
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: false,
-          error: errMsg,
-        }));
-      } catch (err) {
-        console.error('[WebLinker] Login error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: false,
-          error: err.message,
-        }));
-      }
-    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      linked: !!session.linkedUser,
+      username: session.linkedUser || null,
+    }));
     return true;
   }
-
-  // Route 3: POST /api/connect/mfa (Submit 2FA / TOTP code)
-  if (req.method === 'POST' && url.pathname === '/api/connect/mfa') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const { id, ticket, code } = JSON.parse(body);
-        const session = getConnectSession(id);
-        if (!session) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'A munkamenet lejárt.' }));
-          return;
-        }
-
-        if (!ticket || !code) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Hiányzó 2FA kód vagy ticket.' }));
-          return;
-        }
-
-        const discordRes = await fetch('https://discord.com/api/v9/auth/mfa/totp', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': BROWSER_UA,
-          },
-          body: JSON.stringify({
-            code: code.trim(),
-            ticket: ticket,
-            login_source: null,
-            gift_code_sku_id: null,
-          }),
-        });
-
-        const data = await discordRes.json();
-
-        if (data.token) {
-          const api = new DiscordUserAPI(data.token);
-          const user = await api.getCurrentUser();
-          const savedUsername = user.global_name || user.username;
-
-          saveToken(session.uid, session.label || 'main', data.token, {
-            id: user.id,
-            username: savedUsername,
-          });
-
-          if (typeof session.onLinked === 'function') {
-            try {
-              await session.onLinked({ user, token: data.token });
-            } catch (e) {
-              console.warn('[WebLinker] onLinked error:', e.message);
-            }
-          }
-
-          activeConnectSessions.delete(id);
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            success: true,
-            username: savedUsername,
-          }));
-          return;
-        }
-
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: false,
-          error: data.message || 'Érvénytelen 2FA kód.',
-        }));
-      } catch (err) {
-        console.error('[WebLinker] MFA error:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: false,
-          error: err.message,
-        }));
-      }
-    });
-    return true;
-  }
-
-  // Route 4: POST /api/auth/sync (Direct sync from local login)
+  // Route 3: POST /api/auth/sync (Direct sync from local login)
   if (req.method === 'POST' && url.pathname === '/api/auth/sync') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -613,6 +378,18 @@ export async function handleConnectRequest(req, res) {
           id: user.id,
           username: savedUsername,
         });
+
+        // Notify active web sessions so browser turns green automatically
+        for (const [sId, sess] of activeConnectSessions.entries()) {
+          sess.linkedUser = savedUsername;
+          if (typeof sess.onLinked === 'function') {
+            try {
+              await sess.onLinked({ user, token: cleanToken });
+            } catch (e) {
+              console.warn('[WebLinker] onLinked error:', e.message);
+            }
+          }
+        }
 
         console.log(`[WebLinker] ✅ Helyi szinkronizáció sikeres: ${savedUsername} (${user.id}) elmentve!`);
 
