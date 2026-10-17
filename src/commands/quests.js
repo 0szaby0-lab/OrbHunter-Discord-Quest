@@ -1,15 +1,24 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getDecryptedToken, getSettings, logQuest } from '../database/sqlite.js';
+import { getDecryptedToken, getSettings, logQuest, listTokens } from '../database/sqlite.js';
 import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { parseAllQuests, filterRunnableQuests } from '../engine/quest-parser.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { ok, warn, err, questListEmbed, statusEmbed, ui, bar, fmtSec, E } from '../utils/embeds.js';
 import { taskIcon } from '../utils/emojis.js';
 
-function getToken(uid, label = 'main') {
-  return getDecryptedToken(uid, label) || getDecryptedToken(uid, 'default');
+export function getToken(uid, label = 'main') {
+  const token = getDecryptedToken(uid, label) || getDecryptedToken(uid, 'default');
+  if (token) return token;
+  const all = listTokens(uid);
+  if (all && all.length > 0) {
+    return getDecryptedToken(uid, all[0].label);
+  }
+  const ownerId = process.env.OWNER_ID || '1095731086513930260';
+  if (uid === ownerId && process.env.USER_TOKEN) {
+    return process.env.USER_TOKEN;
+  }
+  return null;
 }
-
 
 export async function fetchParsed(token) {
   const api = new DiscordUserAPI(token);
@@ -26,7 +35,7 @@ export async function ctx(ix, label = 'main') {
 export async function runMode(ix, opts = {}) {
   const label = ix.options?.getString?.('label') || 'main';
   const c = await ctx(ix, label);
-  if (c.error) return ix.editReply({ embeds: [warn('Nincs fiók csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a **📱 QR Belépés** gombra vagy használd a \`/login\` parancsot.`)] });
+  if (c.error) return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a zöld **🔑 Csatlakozás** gombra a tokened megadásához, vagy a **🌐 Webes Link** gombra!`)] });
 
   if (getRunState(c.userId)) {
     return ix.editReply({ embeds: [warn('Busy', `${E.clock()} Run active — \`/quests stop\``)] });

@@ -4,7 +4,7 @@ import { QuestEngine, getRunState, abortRun } from '../engine/quest-engine.js';
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { getSettings, saveSettings, getDecryptedToken, listTokens, removeToken, saveToken } from '../database/sqlite.js';
 import { filterRunnableQuests } from '../engine/quest-parser.js';
-import { runMode, ctx, fetchParsed } from './quests.js';
+import { runMode, ctx, fetchParsed, getToken } from './quests.js';
 import { handleQrLogin } from './token.js';
 import { maskToken } from '../utils/crypto.js';
 import { createCaptchaSession, getPublicBaseUrl } from '../server/captcha-relay.js';
@@ -214,7 +214,7 @@ export async function handlePanelButton(ix) {
     await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const c = await ctx(ix, 'main');
     if (c.error) {
-      return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a **📱 QR Belépés** gombra.`)] });
+      return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a zöld **🔑 Csatlakozás** gombra a tokened megadásához, vagy a **🌐 Webes Link** gombra!`)] });
     }
     try {
       const quests = await fetchParsed(c.token);
@@ -228,7 +228,7 @@ export async function handlePanelButton(ix) {
     await ix.deferReply({ flags: MessageFlags.Ephemeral });
     const c = await ctx(ix, 'main');
     if (c.error) {
-      return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a **📱 QR Belépés** gombra.`)] });
+      return ix.editReply({ embeds: [warn('Nincs Fiók Csatlakoztatva', `${E.key()} Még nem csatlakoztattál fiókot! Kattints a zöld **🔑 Csatlakozás** gombra a tokened megadásához, vagy a **🌐 Webes Link** gombra!`)] });
     }
     try {
       const engine = new QuestEngine(c.token);
@@ -328,9 +328,9 @@ export async function handlePanelButton(ix) {
 
   if (id === 'btn_check' || id === 'panel_check') {
     await ix.deferReply({ flags: MessageFlags.Ephemeral });
-    const token = getDecryptedToken(uid, 'main') || getDecryptedToken(uid, 'default');
+    const token = getToken(uid, 'main');
     if (!token) {
-      return ix.editReply({ embeds: [warn('Nincs Fiók Mentve', `${E.key()} Még nem mentettél el fiókot. Használd a **📱 QR Belépés** gombot.`)] });
+      return ix.editReply({ embeds: [warn('Nincs Fiók Mentve', `${E.key()} Még nem mentettél el fiókot. Használd a zöld **🔑 Csatlakozás** vagy **🌐 Webes Link** gombot!`)] });
     }
 
     try {
@@ -353,7 +353,7 @@ export async function handlePanelButton(ix) {
   if (id === 'btn_token_list') {
     const tokens = listTokens(uid);
     if (!tokens.length) {
-      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a **📱 QR Belépés** gombot vagy a \`login.bat\`-ot!`)], flags: MessageFlags.Ephemeral });
+      return ix.reply({ embeds: [warn('Nincs Fiók', `${E.key()} Még nincs elmentett fiókod. Használd a zöld **🔑 Csatlakozás** vagy **🌐 Webes Link** gombot!`)], flags: MessageFlags.Ephemeral });
     }
     const lines = tokens.map(t => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
     return ix.reply({ embeds: [ok('Elmentett Fiókjaid', lines.join('\n'))], flags: MessageFlags.Ephemeral });

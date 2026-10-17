@@ -9,7 +9,7 @@ const { brand } = config;
 export function ui(title, desc, color = brand.color) {
   return new EmbedBuilder()
     .setColor(color)
-    .setAuthor({ name: `Orbweaver` })
+    .setAuthor({ name: brand.name })
     .setTitle(`${E.spider()} ${title}`)
     .setDescription(desc)
     .setFooter({ text: brand.tagline })

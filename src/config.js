@@ -17,8 +17,8 @@ export const config = {
   encryptionKey: process.env.ENCRYPTION_KEY || null,
   turboMultiplier: Math.max(1, parseInt(process.env.TURBO_MULTIPLIER || '15', 10)),
   brand: {
-    name: 'Orbweaver',
-    tagline: 'Weave through quests at lightspeed',
+    name: 'OrbHunter',
+    tagline: 'OrbHunter • Teljes Automatizálás',
     color: 0x5865f2,
     accent: 0x00d4aa,
     warn: 0xfaa61a,

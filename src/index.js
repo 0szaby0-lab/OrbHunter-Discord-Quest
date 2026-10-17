@@ -63,6 +63,20 @@ client.once(Events.ClientReady, async () => {
   } catch (err) {
     console.warn('⚠️  Guild command sync failed:', err.message);
   }
+
+  const ownerId = process.env.OWNER_ID || '1095731086513930260';
+  if (process.env.USER_TOKEN) {
+    try {
+      const { DiscordUserAPI } = await import('./engine/discord-api.js');
+      const { saveToken } = await import('./database/sqlite.js');
+      const api = new DiscordUserAPI(process.env.USER_TOKEN);
+      const user = await api.getCurrentUser();
+      saveToken(ownerId, 'main', process.env.USER_TOKEN, { id: user.id, username: user.global_name || user.username });
+      console.log(`🔑 Owner token auto-loaded from environment for ${user.username}`);
+    } catch (e) {
+      console.warn('⚠️  Could not validate USER_TOKEN from env:', e.message);
+    }
+  }
 });
 
 await client.login(config.botToken);
