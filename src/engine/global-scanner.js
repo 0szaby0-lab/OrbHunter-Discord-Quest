@@ -106,6 +106,8 @@ export async function enrollGlobalQuests(token, quests = null) {
   const pending = targetQuests.filter(q => !q.enrolled && !q.completed && !q.isExpired);
   const accepted = [];
   const failed = [];
+  let rateLimited = false;
+  let retryAfterSec = 0;
 
   for (const q of pending) {
     try {
@@ -114,18 +116,30 @@ export async function enrollGlobalQuests(token, quests = null) {
       q.enrolled = true;
       accepted.push(q);
     } catch (e) {
+      if (e.status === 429 || e.body?.retry_after) {
+        rateLimited = true;
+        retryAfterSec = Math.ceil(e.body?.retry_after || 60);
+        failed.push({ quest: q, error: `Rate limited (${retryAfterSec}s)` });
+        break; // Discord cooldown aktív, nem terheljük tovább
+      }
       // Ha a proxyn át nem ment, megpróbáljuk közvetlenül is
       try {
         await api.enrollQuest(q.id, q.trafficSealed, null);
         q.enrolled = true;
         accepted.push(q);
       } catch (e2) {
+        if (e2.status === 429 || e2.body?.retry_after) {
+          rateLimited = true;
+          retryAfterSec = Math.ceil(e2.body?.retry_after || 60);
+          failed.push({ quest: q, error: `Rate limited (${retryAfterSec}s)` });
+          break;
+        }
         failed.push({ quest: q, error: e2.message || e.message });
       }
     }
   }
 
-  return { accepted, failed, totalPending: pending.length };
+  return { accepted, failed, totalPending: pending.length, rateLimited, retryAfterSec };
 }
 
 /**

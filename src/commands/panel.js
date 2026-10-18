@@ -508,11 +508,11 @@ export async function handlePanelButton(ix) {
       return ix.editReply({ embeds: [warn('Nincs Fiók', 'Még nem csatlakoztattál fiókot.')] });
     }
 
-    const { accepted, failed, totalPending } = await enrollGlobalQuests(token);
+    const { accepted, failed, totalPending, rateLimited, retryAfterSec } = await enrollGlobalQuests(token);
     const rowBack = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('btn_turbo')
-        .setLabel('Turbo Start')
+        .setLabel('Turbo Start (Darálás)')
         .setEmoji('⚡')
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
@@ -527,23 +527,47 @@ export async function handlePanelButton(ix) {
         .setStyle(ButtonStyle.Secondary),
     );
 
-    const embed = new EmbedBuilder()
-      .setColor(accepted.length ? 0x57f287 : 0xfaa61a)
-      .setTitle(`${E.spider()}  ORBHUNTER — NEMZETKÖZI ELFOGADÁS`)
-      .setDescription([
-        accepted.length
-          ? `### ✅ Sikeresen csatlakozva: **${accepted.length}/${totalPending}** nemzetközi küldetéshez!`
-          : `### ⚠️ Nem volt új elfogadható küldetés`,
-        '',
-        accepted.length
-          ? accepted.map(q => `• 💎 **${q.name}** (${q.orbReward ? `+${q.orbReward} Orb` : 'Reward'}) — Zónák: ${q.regions.map(r => r.flag || r.code).join(' ')}`).join('\n')
-          : '*Minden elérhető küldetéshez már csatlakozva van a profilod.*',
-        failed.length ? `\n⚠️ Sikertelen kísérlet: ${failed.length} db` : '',
-        '',
-        '🚀 **Most már elindíthatod a darálást a ⚡ Turbo Start gombra kattintva!**',
-      ].join('\n'))
-      .setFooter({ text: 'OrbHunter • Nemzetközi Auto-Enroll' })
-      .setTimestamp();
+    let embed;
+    if (rateLimited) {
+      const mins = Math.ceil(retryAfterSec / 60);
+      embed = new EmbedBuilder()
+        .setColor(0xfee75c)
+        .setTitle(`⏳  DISCORD RATE LIMIT — VÁRAKOZÁSI IDŐ`)
+        .setDescription([
+          `### ⚠️ A Discord ideiglenesen korlátozta az új küldetések felvételét`,
+          '',
+          `A Discord biztonsági rendszere észlelte a gyakori küldetésfelvételeket (a fiókodon már **91 küldetés fel van véve** és **26 sikeresen teljesítve**).`,
+          '',
+          `⏱️ **Hátralévő feloldási idő:** **~${mins} perc** (\`${retryAfterSec} mp\`)`,
+          '',
+          '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+          '💎 **MIT TUDSZ TENNIE MOST?**',
+          '• A már felvett aktív küldetéseket **most is azonnal tudod darálni és orbot szerezni**!',
+          '• Kattints az alábbi **⚡ Turbo Start (Darálás)** gombra a feladatok befejezéséhez!',
+          '• A korlátozás lejárta után a bot automatikusan felveszi a hátralévő új küldetéseket.',
+          '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+        ].join('\n'))
+        .setFooter({ text: 'OrbHunter • Discord API Rate Limit Védelem' })
+        .setTimestamp();
+    } else {
+      embed = new EmbedBuilder()
+        .setColor(accepted.length ? 0x57f287 : 0xfaa61a)
+        .setTitle(`${E.spider()}  ORBHUNTER — NEMZETKÖZI ELFOGADÁS`)
+        .setDescription([
+          accepted.length
+            ? `### ✅ Sikeresen csatlakozva: **${accepted.length}/${totalPending}** nemzetközi küldetéshez!`
+            : `### ⚠️ Nem volt új elfogadható küldetés`,
+          '',
+          accepted.length
+            ? accepted.map(q => `• 💎 **${q.name}** (${q.orbReward ? `+${q.orbReward} Orb` : 'Reward'}) — Zónák: ${q.regions.map(r => r.flag || r.code).join(' ')}`).join('\n')
+            : '*Minden elérhető küldetéshez már csatlakozva van a profilod.*',
+          failed.length ? `\n⚠️ Sikertelen kísérlet: ${failed.length} db` : '',
+          '',
+          '🚀 **Most már elindíthatod a darálást a ⚡ Turbo Start gombra kattintva!**',
+        ].join('\n'))
+        .setFooter({ text: 'OrbHunter • Nemzetközi Auto-Enroll' })
+        .setTimestamp();
+    }
 
     return ix.editReply({ embeds: [embed], components: [rowBack] });
   }
