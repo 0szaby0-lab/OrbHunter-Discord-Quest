@@ -37,11 +37,19 @@ export async function runScheduledCycle() {
       const name = acc.username || acc.label;
 
       console.log(`[AutoScheduler] 🔍 [${name}] Nemzetközi Orbok és küldetések felderítése proxykon át...`);
-      let enrollResult = { accepted: [], failed: [] };
+      let enrollResult = { accepted: [], failed: [], rateLimited: false, retryAfterSec: 0 };
       try {
         enrollResult = await enrollGlobalQuests(token);
         if (enrollResult.accepted.length) {
           console.log(`[AutoScheduler] ✅ [${name}] Sikeresen aktiválva ${enrollResult.accepted.length} nemzetközi küldetés!`);
+        }
+        if (enrollResult.rateLimited && enrollResult.retryAfterSec > 0) {
+          const waitMins = Math.ceil(enrollResult.retryAfterSec / 60);
+          console.log(`[AutoScheduler] ⏳ [${name}] Discord Rate Limit aktív (${waitMins} perc). Automata újraaktiválás beütemezve a lejáratkor!`);
+          setTimeout(() => {
+            console.log(`[AutoScheduler] ⏰ [${name}] Rate limit lejárt, hátralévő küldetések automatikus felvétele indul...`);
+            runScheduledCycle().catch(err => console.error('[AutoScheduler] Újrapróbálkozási ciklus hiba:', err.message));
+          }, (enrollResult.retryAfterSec + 20) * 1000);
         }
       } catch (e) {
         console.warn(`[AutoScheduler] ⚠️ [${name}] Proxy pásztázás figyelmeztetés:`, e.message);
