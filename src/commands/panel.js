@@ -411,7 +411,7 @@ export async function handlePanelButton(ix) {
 
     const labelInput = new TextInputBuilder()
       .setCustomId('input_account_label')
-      .setLabel('Fiók Elnevezése / Címke (pl. main, alt, farm):')
+      .setLabel('Fiók Címke / Elnevezés (pl. main, alt):')
       .setPlaceholder('pl. main, masodlagos, alt (alapértelmezett: main)')
       .setStyle(TextInputStyle.Short)
       .setRequired(false);
