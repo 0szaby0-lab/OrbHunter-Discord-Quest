@@ -5,6 +5,7 @@ import { parseAllQuests, filterRunnableQuests } from '../engine/quest-parser.js'
 import { DiscordUserAPI } from '../engine/discord-api.js';
 import { ok, warn, err, questListEmbed, statusEmbed, ui, bar, fmtSec, E } from '../utils/embeds.js';
 import { taskIcon } from '../utils/emojis.js';
+import { buildGlobalRadarResponse, enrollGlobalQuests } from '../engine/global-scanner.js';
 
 export function getToken(uid, label = null) {
   const activeLabel = label || getActiveLabel(uid) || 'main';
@@ -43,25 +44,43 @@ export async function runMode(ix, opts = {}) {
     return ix.editReply({ embeds: [warn('Busy', `${E.clock()} Run active — \`/quests stop\``)] });
   }
 
+  // 1. Fázis: Ha az auto_enroll aktív, először teszteli a nemzetközi proxykat és elfogadja a régiós orbokat
+  let globalEnrolled = [];
+  if (c.settings.auto_enroll) {
+    try {
+      await ix.editReply({
+        embeds: [ui('Nemzetközi Pásztázás', `${E.radar()} Működő proxyk felderítése és régiós Orbok keresése (US, UK, DE, FR, BR, Helyi IP)…`, 0x5865f2)],
+      });
+      const enrollResult = await enrollGlobalQuests(c.token);
+      globalEnrolled = enrollResult.accepted || [];
+    } catch (e) {
+      console.warn('[runMode] Proxy pásztázás figyelmeztetés:', e.message);
+    }
+  }
+
+  // 2. Fázis: Visszatérés a Render saját közvetlen, stabil IP-címére a daráláshoz
   const quests = filterRunnableQuests(await fetchParsed(c.token));
   if (!quests.length) {
-    return ix.editReply({ embeds: [warn('No Quests', 'No active quests are available on this account right now.')] });
+    return ix.editReply({
+      embeds: [warn('Nincs Futtatható Küldetés', globalEnrolled.length
+        ? `${E.check()} Sikeresen aktiválva **${globalEnrolled.length}** nemzetközi küldetés, de jelenleg mindegyik készre van hajtva.`
+        : 'Jelenleg nincs aktív vagy elindítható küldetés ezen a fiókon.')],
+    });
   }
 
   const engine = new QuestEngine(c.token, {
     turbo: opts.turbo ?? !!c.settings.turbo_mode,
-    autoEnroll: !!c.settings.auto_enroll,
+    autoEnroll: false, // már aktiválva a proxykon át
     autoClaim: !!c.settings.auto_claim,
     mode: opts.sequential ? 'sequential' : 'parallel',
     onProgress: async (tasks) => {
-      try { await ix.editReply({ embeds: [statusEmbed(tasks, `${E.bolt()} Working…`)] }); } catch { /* */ }
+      try { await ix.editReply({ embeds: [statusEmbed(tasks, `${E.bolt()} Darálás folyamatban (Render közvetlen stabil IP-n)…`)] }); } catch { /* */ }
     },
   });
 
-  const pending = quests.filter(q => !q.enrolled).length;
   await ix.editReply({
-    embeds: [ui('Started', `${E.fire()} Running **${quests.length}** quest(s)`
-      + `${pending ? ` · auto-accepting **${pending}**` : ''}…`, 0x5865f2)],
+    embeds: [ui('Darálás Elindítva', `${E.fire()} **${quests.length}** küldetés futtatása Render közvetlen stabil kapcsolatán`
+      + `${globalEnrolled.length ? ` · (ebből **${globalEnrolled.length}** nemzetközileg aktiválva)` : ''}…`, 0x5865f2)],
   });
 
   const result = await engine.run(quests, c.userId);
@@ -90,6 +109,8 @@ export const commands = [
     .setDescription('Quest automation')
     .addSubcommand(s => s.setName('list').setDescription('Show quests')
       .addStringOption(o => o.setName('label').setDescription('Token label')))
+    .addSubcommand(s => s.setName('radar').setDescription('Országos nemzetközi Orb & Quest radar (proxykkal)')
+      .addBooleanOption(o => o.setName('refresh').setDescription('Proxyk azonnali újratesztelése')))
     .addSubcommand(s => s.setName('info').setDescription('Quest details')
       .addStringOption(o => o.setName('name').setDescription('Quest name').setRequired(true))
       .addStringOption(o => o.setName('label').setDescription('Token label')))
@@ -103,12 +124,31 @@ export const commands = [
       .addStringOption(o => o.setName('label').setDescription('Token label')))
     .addSubcommand(s => s.setName('stop').setDescription('Stop run'))
     .addSubcommand(s => s.setName('status').setDescription('Check progress')),
+
+  new SlashCommandBuilder()
+    .setName('radar')
+    .setDescription('Nemzetközi Orb & Quest Radar több országon keresztül (proxykkal)')
+    .addBooleanOption(o => o.setName('refresh').setDescription('Proxyk azonnali újratesztelése')),
 ];
 
 export const handlers = {
+  radar: async (ix) => {
+    await ix.deferReply({ flags: MessageFlags.Ephemeral });
+    const refresh = ix.options?.getBoolean?.('refresh') || false;
+    const res = await buildGlobalRadarResponse(ix.user.id, refresh);
+    return ix.editReply(res);
+  },
+
   quests: async (ix) => {
     const sub = ix.options.getSubcommand();
     const label = ix.options.getString('label') || 'main';
+
+    if (sub === 'radar') {
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
+      const refresh = ix.options?.getBoolean?.('refresh') || false;
+      const res = await buildGlobalRadarResponse(ix.user.id, refresh);
+      return ix.editReply(res);
+    }
 
     if (sub === 'list') {
       await ix.deferReply();

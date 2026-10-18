@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { DiscordUserAPI } from '../engine/discord-api.js';
-import { saveToken } from '../database/sqlite.js';
+import { saveToken, setActiveLabel } from '../database/sqlite.js';
 
 // Memory store for active account linking sessions (TTL: 15 minutes)
 const activeConnectSessions = new Map();
@@ -44,7 +44,7 @@ export function getConnectSession(id) {
 
 export function renderConnectPage(session) {
   const baseUrl = getPublicBaseUrl();
-  const bookmarkletCode = `javascript:(function(){try{var t=null;try{var f=document.createElement('iframe');document.body.appendChild(f);t=JSON.parse(f.contentWindow.localStorage.token);f.remove();}catch(e){}if(!t){try{t=(webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();}catch(e){}}if(!t){alert('Nem sikerült azonosítani a munkamenetet! Kérlek lépj be a Discordba a böngésződben (discord.com/app)!');return;}window.location.href='${baseUrl}/connect/${session.id}?token='+encodeURIComponent(t);}catch(err){alert('Hiba: '+err.message);}})();`;
+  const bookmarkletCode = `javascript:(function(){try{var t=null;try{var f=document.createElement('iframe');document.body.appendChild(f);t=JSON.parse(f.contentWindow.localStorage.token);f.remove();}catch(e){}if(!t){try{t=(webpackChunkdiscord_app.push([[''],{},e=>{m=[];for(let c in e.c)m.push(e.c[c])}]),m).find(m=>m?.exports?.default?.getToken!==void 0).exports.default.getToken();}catch(e){}}if(!t){alert('Nem sikerült azonosítani a munkamenetet! Kérlek lépj be a Discordba a böngésződben (discord.com/app)!');return;}var l=prompt('Fiók Címke / Elnevezés (pl. main, alt):', '${session.label || 'main'}')||'${session.label || 'main'}';window.location.href='${baseUrl}/connect/${session.id}?token='+encodeURIComponent(t)+'&label='+encodeURIComponent(l);}catch(err){alert('Hiba: '+err.message);}})();`;
 
   const isAlreadyLinked = !!session.linkedUser;
   const username = session.linkedUser || session.username;
@@ -341,10 +341,16 @@ export function renderConnectPage(session) {
       <!-- Tab 2: Direct Token Input (Universal for Mobile & PC) -->
       <div id="tabDirect" class="tab-pane">
         <form onsubmit="handleDirectSubmit(event)">
-          <label class="input-label" for="userTokenInput">Discord Fiók-kulcs (Token)</label>
+          <label class="input-label" for="userTokenInput">Discord Fiók-kulcs (Token) *</label>
           <div class="input-wrap">
-            <input type="password" id="userTokenInput" class="input-field" placeholder="Illeszd be ide a fiók-kulcsodat..." autocomplete="off">
+            <input type="password" id="userTokenInput" class="input-field" placeholder="Illeszd be ide a fiók-kulcsodat..." autocomplete="off" required>
           </div>
+
+          <label class="input-label" for="accountLabelInput">Fiók Címke / Elnevezés (pl. main, alt, farm)</label>
+          <div class="input-wrap">
+            <input type="text" id="accountLabelInput" class="input-field" placeholder="pl. main, másodlagos, alt..." value="${session.label || 'main'}">
+          </div>
+
           <button type="submit" id="directSubmitBtn" class="submit-btn">🚀 Fiók Csatlakoztatása</button>
         </form>
 
@@ -364,8 +370,13 @@ export function renderConnectPage(session) {
     <div id="successCard" class="success-card" style="display: ${isAlreadyLinked ? 'block' : 'none'};">
       <div style="font-size: 44px; margin-bottom: 12px;">🎉</div>
       <h2 id="successUsername">Üdv, ${username}!</h2>
-      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br><br>A felhős szerver mostantól 24/7 automatikusan végzi a küldetéseidet.</p>
-      <a href="https://discord.com/app" class="submit-btn" style="margin-top: 20px;">🎮 Vissza a Discordba</a>
+      <span id="successLabelBadge" style="display:inline-block; background:rgba(88,101,242,0.3); border:1px solid #5865f2; border-radius:8px; padding:4px 12px; font-size:13px; font-weight:600; margin-bottom:12px; color:#f2f3f5;">Címke: ${session.label || 'main'}</span>
+      <p>A Discord fiókodat sikeresen összekapcsoltuk az OrbHunterrel.<br><br>A bot készen áll a küldetések automatizálására!</p>
+      
+      <div style="display:flex; gap:10px; margin-top:20px; justify-content:center; flex-wrap:wrap;">
+        <button type="button" class="submit-btn" style="flex:1; min-width:180px; background:#23a55a;" onclick="addAnotherAccount()">➕ Másik Fiók Hozzáadása</button>
+        <a href="https://discord.com/app" class="submit-btn" style="flex:1; min-width:180px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">🎮 Vissza a Discordba</a>
+      </div>
     </div>
 
     <p class="footer-note">🔒 Biztonságos felhő • Adataid AES-256 titkosítással védve a Renderen tárolódnak.</p>
@@ -391,19 +402,42 @@ export function renderConnectPage(session) {
       }
     }
 
-    function showSuccess(username) {
+    function showSuccess(username, label) {
       document.getElementById('connectArea').style.display = 'none';
       var succ = document.getElementById('successCard');
       succ.style.display = 'block';
       if (username) {
         document.getElementById('successUsername').innerText = 'Üdv, ' + username + '!';
       }
+      if (label) {
+        var badge = document.getElementById('successLabelBadge');
+        if (badge) {
+          badge.innerText = 'Címke: ' + label;
+          badge.style.display = 'inline-block';
+        }
+      }
+    }
+
+    function addAnotherAccount() {
+      document.getElementById('successCard').style.display = 'none';
+      document.getElementById('connectArea').style.display = 'block';
+      var tokenInput = document.getElementById('userTokenInput');
+      if (tokenInput) tokenInput.value = '';
+      var labelInput = document.getElementById('accountLabelInput');
+      if (labelInput) labelInput.value = 'alt' + Math.floor(Math.random() * 89 + 10);
+      var btn = document.getElementById('directSubmitBtn');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '🚀 Fiók Csatlakoztatása';
+      }
     }
 
     function handleDirectSubmit(e) {
       e.preventDefault();
       var input = document.getElementById('userTokenInput');
+      var labelInput = document.getElementById('accountLabelInput');
       var token = input.value.trim().replace(/^"(.*)"$/, '$1');
+      var label = labelInput ? labelInput.value.trim() : 'main';
       var btn = document.getElementById('directSubmitBtn');
       var status = document.getElementById('directStatus');
 
@@ -416,12 +450,12 @@ export function renderConnectPage(session) {
       fetch('/api/connect/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: sessionId, token: token })
+        body: JSON.stringify({ id: sessionId, token: token, label: label })
       })
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.success) {
-          showSuccess(res.username);
+          showSuccess(res.username, res.label);
         } else {
           status.className = 'status-msg error';
           status.style.display = 'block';
@@ -446,7 +480,7 @@ export function renderConnectPage(session) {
         .then(function(res) {
           if (res.linked) {
             clearInterval(checkInterval);
-            showSuccess(res.username);
+            showSuccess(res.username, res.label);
           }
         })
         .catch(function() {});
@@ -472,27 +506,31 @@ export async function handleConnectRequest(req, res) {
       return true;
     }
 
-    // Handle token supplied via bookmarklet navigation (?token=...)
+    // Handle token supplied via bookmarklet navigation (?token=...&label=...)
     const tokenParam = url.searchParams.get('token');
+    const labelParam = url.searchParams.get('label');
     if (tokenParam && !session.linkedUser) {
       try {
         const cleanToken = tokenParam.trim().replace(/^"(.*)"$/, '$1');
+        const targetLabel = (labelParam?.trim() || session.label || 'main').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'main';
         const api = new DiscordUserAPI(cleanToken);
         const user = await api.getCurrentUser();
         const savedUsername = user.global_name || user.username;
 
-        saveToken(session.uid, session.label || 'main', cleanToken, {
+        saveToken(session.uid, targetLabel, cleanToken, {
           id: user.id,
           username: savedUsername,
         });
+        setActiveLabel(session.uid, targetLabel);
 
         session.linkedUser = savedUsername;
+        session.label = targetLabel;
 
         if (typeof session.onLinked === 'function') {
-          session.onLinked({ user, token: cleanToken }).catch(e => console.warn('[WebLinker] onLinked error:', e.message));
+          session.onLinked({ user, token: cleanToken, label: targetLabel }).catch(e => console.warn('[WebLinker] onLinked error:', e.message));
         }
 
-        console.log(`[WebLinker] ✅ 1-Kattintásos felhős csatlakozás: ${savedUsername} (${user.id})`);
+        console.log(`[WebLinker] ✅ 1-Kattintásos felhős csatlakozás: ${savedUsername} [${targetLabel}] (${user.id})`);
       } catch (err) {
         console.error('[WebLinker] Token query error:', err.message);
         session.linkError = err.message;
@@ -518,6 +556,7 @@ export async function handleConnectRequest(req, res) {
     res.end(JSON.stringify({
       linked: !!session.linkedUser,
       username: session.linkedUser || null,
+      label: session.label || 'main',
     }));
     return true;
   }
@@ -528,7 +567,7 @@ export async function handleConnectRequest(req, res) {
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
-        const { id, token } = JSON.parse(body);
+        const { id, token, label } = JSON.parse(body);
         const session = getConnectSession(id);
         if (!session) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -543,31 +582,35 @@ export async function handleConnectRequest(req, res) {
         }
 
         const cleanToken = token.trim().replace(/^"(.*)"$/, '$1');
+        const targetLabel = (label?.trim() || session.label || 'main').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'main';
         const api = new DiscordUserAPI(cleanToken);
         const user = await api.getCurrentUser();
         const savedUsername = user.global_name || user.username;
 
-        saveToken(session.uid, session.label || 'main', cleanToken, {
+        saveToken(session.uid, targetLabel, cleanToken, {
           id: user.id,
           username: savedUsername,
         });
+        setActiveLabel(session.uid, targetLabel);
 
         session.linkedUser = savedUsername;
+        session.label = targetLabel;
 
         if (typeof session.onLinked === 'function') {
           try {
-            await session.onLinked({ user, token: cleanToken });
+            await session.onLinked({ user, token: cleanToken, label: targetLabel });
           } catch (e) {
             console.warn('[WebLinker] onLinked error:', e.message);
           }
         }
 
-        console.log(`[WebLinker] ✅ Sikeres felhős csatlakozás: ${savedUsername} (${user.id})`);
+        console.log(`[WebLinker] ✅ Sikeres felhős csatlakozás: ${savedUsername} [${targetLabel}] (${user.id})`);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: true,
           username: savedUsername,
+          label: targetLabel,
         }));
       } catch (err) {
         console.error('[WebLinker] Connect save error:', err.message);

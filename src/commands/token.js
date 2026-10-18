@@ -6,6 +6,7 @@ import { ok, warn, err, ui, E } from '../utils/embeds.js';
 import { maskToken } from '../utils/crypto.js';
 import { parseAllQuests } from '../engine/quest-parser.js';
 import { config } from '../config.js';
+import { buildAccountsView } from './panel.js';
 
 export const commands = [
   new SlashCommandBuilder()
@@ -37,10 +38,11 @@ export async function handleQrLogin(ix, label = 'main') {
     uid,
     username,
     label,
-    onLinked: async ({ user }) => {
+    onLinked: async ({ user, label: linkedLabel }) => {
+      const targetLabel = linkedLabel || label || 'main';
       let questCountText = '';
       try {
-        const api = new DiscordUserAPI(getDecryptedToken(uid, label));
+        const api = new DiscordUserAPI(getDecryptedToken(uid, targetLabel));
         const quests = parseAllQuests(await api.fetchAllQuests());
         const active = quests.filter(q => !q.completed).length;
         questCountText = `\n${E.radar()} **${active}** aktív küldetés elérhető a fiókon.`;
@@ -49,7 +51,7 @@ export async function handleQrLogin(ix, label = 'main') {
       }
 
       const embed = ok('Fiók Sikeresen Összekapcsolva!', [
-        `${E.check()} **${user.global_name || user.username}** fiók elmentve (\`${label}\`)`,
+        `${E.check()} **${user.global_name || user.username}** fiók elmentve (\`${targetLabel}\`)!`,
         questCountText,
         '',
         `🚀 Most már futtathatod a vezérlőpulton a **Turbo Start** vagy **Minden Quest** gombot!`,
@@ -153,10 +155,9 @@ export const handlers = {
     }
 
     if (sub === 'list') {
-      const tokens = listTokens(uid);
-      if (!tokens.length) return ix.reply({ embeds: [warn('Üres', `${E.key()} Még nincs csatlakoztatott fiókod. Használd a \`/login\` parancsot!`)] });
-      const lines = tokens.map((t, i) => `${E.key()} \`${t.label}\` — **${t.discord_username || '?'}**`);
-      return ix.reply({ embeds: [ok('Csatlakoztatott Fiókok', lines.join('\n'))], flags: MessageFlags.Ephemeral });
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
+      const view = await buildAccountsView(uid);
+      return ix.editReply(view);
     }
   },
 };

@@ -28,6 +28,7 @@ import { filterRunnableQuests } from '../engine/quest-parser.js';
 import { runMode, ctx, fetchParsed, getToken } from './quests.js';
 import { handleQrLogin } from './token.js';
 import { maskToken } from '../utils/crypto.js';
+import { buildGlobalRadarResponse, enrollGlobalQuests } from '../engine/global-scanner.js';
 
 const OWNER_ID = process.env.OWNER_ID || '1095731086513930260';
 
@@ -54,8 +55,8 @@ export function buildPanelMessage() {
       {
         name: '🚀  GYORS HASZNÁLATI ÚTMUTATÓ',
         value: [
-          '>>> 1️⃣ **Fiók Hozzáadása:** Kattints a **🔑 Fiók Csatlakoztatása** gombra, és add meg a tokenedet (több fiókot is hozzáadhatsz külön elnevezéssel!).',
-          '2️⃣ **Saját Pult:** Nyisd meg a **🚀 Saját Vezérlőpult**-ot, ahol privátban láthatod a profiljaidat és a küldetéseidet.',
+          '>>> 1️⃣ **Fiók Hozzáadása:** Kattints a **🔑 Fiók Hozzáadása** gombra a tokened megadásához (több fiókot is hozzáadhatsz külön elnevezéssel!).',
+          '2️⃣ **Fiókjaid & Radar:** Nyisd meg a **👥 Fiókjaim** menüt vagy a **🌐 Országos Radar**-t a nemzetközi orbok felderítéséhez.',
           '3️⃣ **Darálás Indítása:** Kattints a **⚡ Turbo Start** gombra a villámgyors befejezéshez!',
         ].join('\n'),
         inline: false,
@@ -64,12 +65,25 @@ export function buildPanelMessage() {
     .setFooter({ text: 'OrbHunter • Teljes Automatizálás • Nyisd meg a saját pultodat alább' })
     .setTimestamp();
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_open_private_panel')
       .setLabel('Saját Vezérlőpult')
       .setEmoji('🚀')
       .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_my_accounts')
+      .setLabel('Fiókjaim')
+      .setEmoji('👥')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_global_radar')
+      .setLabel('Országos Radar')
+      .setEmoji('🌐')
+      .setStyle(ButtonStyle.Success),
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_manual_token')
       .setLabel('Fiók Hozzáadása')
@@ -87,7 +101,7 @@ export function buildPanelMessage() {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row1, row2] };
 }
 
 /**
@@ -160,18 +174,32 @@ export async function buildPrivatePanel(uid) {
   const isRunning = !!runState;
   const on = v => v ? '🟢 BE' : '🔴 KI';
 
+  const accountLines = tokens.map(t => {
+    const isActive = t.label === currentLabel;
+    const badge = isActive ? '🟢 **[AKTÍV]**' : '⚪ `[Készenlétben]`';
+    const name = t.discord_username ? `**${t.discord_username}**` : `*Ismeretlen profil*`;
+    const idInfo = t.discord_account_id ? ` • ID: \`${t.discord_account_id}\`` : '';
+    return `${isActive ? '👉 ' : '• '}${badge} ${name} — Címke: \`${t.label}\`${idInfo}`;
+  }).join('\n');
+
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle(`${E.spider()}  ORBHUNTER — SZEMÉLYES VEZÉRLŐPULT`)
     .setDescription([
-      `👤 **Aktív Profil:** **${userTitle}** (Címke: \`${currentLabel}\`)`,
+      `👤 **Kiválasztott Aktív Fiók:** **${userTitle}** (Címke: \`${currentLabel}\`)`,
       `📊 **Küldetés állapot:** ${questSummary}`,
       `⚙️ **Beállítások:** Turbo mód: **${on(s.turbo_mode)}** • Auto-Enroll: **${on(s.auto_enroll)}**`,
       `📡 **Futási állapot:** ${isRunning ? '⚡ **FOLYAMATBAN VAN**' : '💤 **Nyugvó (Inaktív)**'}`,
       '',
-      `📑 **Összesen ${tokens.length} fiókod van összekapcsolva.**`,
       '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
     ].join('\n'))
+    .addFields(
+      {
+        name: `👥  CSATLAKOZTATOTT FIÓKJAID (${tokens.length} db)`,
+        value: accountLines || '*Nincs fiók*',
+        inline: false,
+      }
+    )
     .setFooter({ text: 'OrbHunter • Személyes Vezérlőpult • Csak te látod' })
     .setTimestamp();
 
@@ -257,7 +285,167 @@ export async function buildPrivatePanel(uid) {
       .setEmoji('🔄')
       .setStyle(ButtonStyle.Secondary),
   );
-  components.push(rowAccount);
+  // Sor 3: Országos Nemzetközi Radar és Eszközök
+  const rowTools = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_global_radar')
+      .setLabel('Országos Orb Radar')
+      .setEmoji('🌐')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_my_accounts')
+      .setLabel('Fiókjaim')
+      .setEmoji('👥')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_login')
+      .setLabel('Webes Link')
+      .setEmoji('🌐')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_panel_help')
+      .setLabel('Súgó & Info')
+      .setEmoji('ℹ️')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  components.push(rowTools);
+
+  return { embeds: [embed], components };
+}
+
+/**
+ * 3. CSATLAKOZTATOTT FIÓKOK RÉSZLETES ÁTTEKINTÉSE
+ * Részletesen kilistázza a felhasználó összes fiókját, állapotukat, elérhető küldetéseiket,
+ * és lehetőséget ad az aktív fiók azonnali kiválasztására vagy kijelentkezésre.
+ */
+export async function buildAccountsView(uid) {
+  const tokens = listTokens(uid);
+  const activeLabel = getActiveLabel(uid);
+
+  if (!tokens || tokens.length === 0) {
+    const embed = new EmbedBuilder()
+      .setColor(0xfaa61a)
+      .setTitle(`${E.spider()}  ORBHUNTER — CSATLAKOZTATOTT FIÓKJAID`)
+      .setDescription([
+        '### ⚠️ Nincs csatlakoztatott fiókod',
+        '',
+        'Még nem kapcsoltál össze egyetlen Discord fiókot sem a rendszerrel.',
+        'Kattints az alábbi **🔑 Fiók Hozzáadása** gombra a tokened megadásához, vagy kérj **🌐 Webes Linket**!',
+      ].join('\n'))
+      .setFooter({ text: 'OrbHunter • Fiók Áttekintés' })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('btn_manual_token')
+        .setLabel('Fiók Hozzáadása')
+        .setEmoji('🔑')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('btn_login')
+        .setLabel('Webes Link')
+        .setEmoji('🌐')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('btn_open_private_panel')
+        .setLabel('Vezérlőpult')
+        .setEmoji('🚀')
+        .setStyle(ButtonStyle.Primary),
+    );
+
+    return { embeds: [embed], components: [row] };
+  }
+
+  const currentLabel = tokens.some(t => t.label === activeLabel) ? activeLabel : tokens[0].label;
+
+  const accountEntries = [];
+  for (const t of tokens) {
+    const isActive = t.label === currentLabel;
+    const rawToken = getDecryptedToken(uid, t.label);
+    let statusText = '🟢 Bejelentkezve (Érvényes token)';
+    let questInfo = '';
+
+    if (!rawToken) {
+      statusText = '🔴 Hiányzó kulcs';
+    } else {
+      try {
+        const quests = await fetchParsed(rawToken);
+        const activeQuests = quests.filter(q => !q.completed).length;
+        const doneQuests = quests.filter(q => q.completed).length;
+        questInfo = ` • 🎯 **${activeQuests}** aktív / **${doneQuests}** kész küldetés`;
+      } catch {
+        statusText = '⚠️ Lejárt munkamenet (újrahitelesítés szükséges)';
+      }
+    }
+
+    const badge = isActive ? '🟢 **[AKTÍV FIÓK]**' : '⚪ `[Készenlétben]`';
+    const name = t.discord_username ? `**${t.discord_username}**` : `*Ismeretlen profil*`;
+    const idPart = t.discord_account_id ? ` (ID: \`${t.discord_account_id}\`)` : '';
+
+    accountEntries.push([
+      `${isActive ? '👉 ' : '• '}${badge} ${name}${idPart}`,
+      `   🏷️ Címke: \`${t.label}\` • Állapot: ${statusText}${questInfo}`,
+    ].join('\n'));
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(`${E.spider()}  ORBHUNTER — CSATLAKOZTATOTT FIÓKJAID (${tokens.length})`)
+    .setDescription([
+      '**Az alábbi Discord fiókok vannak bejelentkeztetve a rendszerbe:**',
+      'A bot ezekkel a profilokkal képes végrehajtani a küldetéseket a nevedben.',
+      '',
+      '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      accountEntries.join('\n\n'),
+      '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬',
+      '',
+      '💡 *Ha több fiókod van, alább a legördülő menüvel válthatod át az aktív profilt.*',
+    ].join('\n'))
+    .setFooter({ text: 'OrbHunter • Fiók Áttekintés • Csak te látod' })
+    .setTimestamp();
+
+  const components = [];
+
+  if (tokens.length > 1) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('select_active_account')
+      .setPlaceholder(`Válts aktív fiókot (Jelenlegi: ${currentLabel})`)
+      .addOptions(
+        tokens.map(t =>
+          new StringSelectMenuOptionBuilder()
+            .setLabel(`${t.discord_username || t.label} [${t.label}]`)
+            .setValue(t.label)
+            .setDescription(`Fiók: ${t.discord_username || '?'} • Címke: ${t.label}`)
+            .setDefault(t.label === currentLabel)
+            .setEmoji('👤')
+        )
+      );
+    components.push(new ActionRowBuilder().addComponents(selectMenu));
+  }
+
+  const rowButtons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_open_private_panel')
+      .setLabel('Vezérlőpult')
+      .setEmoji('🚀')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_manual_token')
+      .setLabel('Új Fiók (+)')
+      .setEmoji('➕')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('btn_remove_active_account')
+      .setLabel(`Kijelentkezés (${currentLabel})`)
+      .setEmoji('🗑️')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('btn_my_accounts')
+      .setLabel('Frissítés')
+      .setEmoji('🔄')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  components.push(rowButtons);
 
   return { embeds: [embed], components };
 }
@@ -272,11 +460,92 @@ export async function handlePanelButton(ix) {
   const id = ix.customId;
   const uid = ix.user.id;
 
-  // 1. Privát Pult Megnyitása a publikus panelről
+  // 1. Privát Pult Megnyitása
   if (id === 'btn_open_private_panel') {
-    await ix.deferReply({ flags: MessageFlags.Ephemeral });
-    const panel = await buildPrivatePanel(uid);
-    return ix.editReply(panel);
+    if (ix.message?.flags?.has(MessageFlags.Ephemeral)) {
+      await ix.deferUpdate();
+      const panel = await buildPrivatePanel(uid);
+      return ix.editReply(panel);
+    } else {
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
+      const panel = await buildPrivatePanel(uid);
+      return ix.editReply(panel);
+    }
+  }
+
+  // 1b. Csatlakoztatott Fiókok Megtekintése
+  if (id === 'btn_my_accounts') {
+    if (ix.message?.flags?.has(MessageFlags.Ephemeral)) {
+      await ix.deferUpdate();
+      const view = await buildAccountsView(uid);
+      return ix.editReply(view);
+    } else {
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
+      const view = await buildAccountsView(uid);
+      return ix.editReply(view);
+    }
+  }
+
+  // 1c. Országos Nemzetközi Radar pásztázás
+  if (id === 'btn_global_radar' || id === 'btn_global_radar_refresh') {
+    const isEphemeral = Boolean(ix.message?.flags?.has(MessageFlags.Ephemeral));
+    if (isEphemeral) {
+      await ix.deferUpdate();
+      const res = await buildGlobalRadarResponse(uid, id === 'btn_global_radar_refresh');
+      return ix.editReply(res);
+    } else {
+      await ix.deferReply({ flags: MessageFlags.Ephemeral });
+      const res = await buildGlobalRadarResponse(uid, id === 'btn_global_radar_refresh');
+      return ix.editReply(res);
+    }
+  }
+
+  // 1d. Nemzetközi küldetések automatikus aktiválása proxykon át
+  if (id === 'btn_enroll_all_global') {
+    await ix.deferUpdate();
+    const token = getToken(uid);
+    if (!token) {
+      return ix.editReply({ embeds: [warn('Nincs Fiók', 'Még nem csatlakoztattál fiókot.')] });
+    }
+
+    const { accepted, failed, totalPending } = await enrollGlobalQuests(token);
+    const rowBack = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('btn_turbo')
+        .setLabel('Turbo Start')
+        .setEmoji('⚡')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('btn_open_private_panel')
+        .setLabel('Vezérlőpult')
+        .setEmoji('🚀')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('btn_global_radar')
+        .setLabel('Országos Radar')
+        .setEmoji('🌐')
+        .setStyle(ButtonStyle.Secondary),
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor(accepted.length ? 0x57f287 : 0xfaa61a)
+      .setTitle(`${E.spider()}  ORBHUNTER — NEMZETKÖZI ELFOGADÁS`)
+      .setDescription([
+        accepted.length
+          ? `### ✅ Sikeresen csatlakozva: **${accepted.length}/${totalPending}** nemzetközi küldetéshez!`
+          : `### ⚠️ Nem volt új elfogadható küldetés`,
+        '',
+        accepted.length
+          ? accepted.map(q => `• 💎 **${q.name}** (${q.orbReward ? `+${q.orbReward} Orb` : 'Reward'}) — Zónák: ${q.regions.map(r => r.flag || r.code).join(' ')}`).join('\n')
+          : '*Minden elérhető küldetéshez már csatlakozva van a profilod.*',
+        failed.length ? `\n⚠️ Sikertelen kísérlet: ${failed.length} db` : '',
+        '',
+        '🚀 **Most már elindíthatod a darálást a ⚡ Turbo Start gombra kattintva!**',
+      ].join('\n'))
+      .setFooter({ text: 'OrbHunter • Nemzetközi Auto-Enroll' })
+      .setTimestamp();
+
+    return ix.editReply({ embeds: [embed], components: [rowBack] });
   }
 
   // 2. Fiókválasztás a legördülő menüből (Select Menu)
@@ -285,14 +554,18 @@ export async function handlePanelButton(ix) {
     if (selectedLabel) {
       setActiveLabel(uid, selectedLabel);
     }
-    const panel = await buildPrivatePanel(uid);
-    return ix.update(panel);
+    await ix.deferUpdate();
+    const isAccountsView = Boolean(ix.message?.embeds?.[0]?.title?.includes('CSATLAKOZTATOTT FIÓKJAID'));
+    const updatedContent = isAccountsView ? await buildAccountsView(uid) : await buildPrivatePanel(uid);
+    return ix.editReply(updatedContent);
   }
 
-  // 3. Privát Pult Frissítése
+  // 3. Privát Pult / Fióknézet Frissítése
   if (id === 'btn_private_refresh') {
-    const panel = await buildPrivatePanel(uid);
-    return ix.update(panel);
+    await ix.deferUpdate();
+    const isAccountsView = Boolean(ix.message?.embeds?.[0]?.title?.includes('CSATLAKOZTATOTT FIÓKJAID'));
+    const updatedContent = isAccountsView ? await buildAccountsView(uid) : await buildPrivatePanel(uid);
+    return ix.editReply(updatedContent);
   }
 
   // 4. Kijelentkezés kizárólag az épp aktív fiókból
@@ -305,8 +578,10 @@ export async function handlePanelButton(ix) {
       setActiveLabel(uid, remaining[0].label);
     }
 
-    const panel = await buildPrivatePanel(uid);
-    return ix.update(panel);
+    await ix.deferUpdate();
+    const isAccountsView = Boolean(ix.message?.embeds?.[0]?.title?.includes('CSATLAKOZTATOTT FIÓKJAID'));
+    const updatedContent = isAccountsView ? await buildAccountsView(uid) : await buildPrivatePanel(uid);
+    return ix.editReply(updatedContent);
   }
 
   // 5. Kapcsolók (Turbo Ki/Be, Auto-Enroll Ki/Be)
@@ -480,6 +755,19 @@ export async function handlePanelModal(ix) {
         questCountText = `\n${E.radar()} **${active}** aktív küldetés azonnal elérhető.`;
       } catch {}
 
+      const rowModalNav = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('btn_open_private_panel')
+          .setLabel('Saját Vezérlőpult')
+          .setEmoji('🚀')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('btn_my_accounts')
+          .setLabel('Fiókjaim')
+          .setEmoji('👥')
+          .setStyle(ButtonStyle.Secondary),
+      );
+
       return ix.editReply({
         embeds: [ok('Fiók Sikeresen Hozzáadva!', [
           `${E.check()} **${user.global_name || user.username}** fiók elmentve (\`${cleanLabel}\`)!`,
@@ -487,6 +775,7 @@ export async function handlePanelModal(ix) {
           '',
           `🚀 Most már elindíthatod a **Saját Vezérlőpult**-on a **⚡ Turbo Start** vagy **🚀 Minden Quest** gombbal!`,
         ].filter(Boolean).join('\n'))],
+        components: [rowModalNav],
       });
     } catch (err) {
       return ix.editReply({

@@ -38,6 +38,10 @@ export function createBot(rest = null) {
       try {
         await handlePanelButton(ix);
       } catch (e) {
+        if (e.code === 10062 || e.code === 40060) {
+          console.warn(`[Interaction:${ix.customId}] Interakció már lezárult (${e.code}).`);
+          return;
+        }
         console.error(`[Interaction:${ix.customId}]`, e);
         const payload = { embeds: [err('Hiba', e.message || 'Hiba történt a művelet végrehajtásakor.')], flags: MessageFlags.Ephemeral };
         if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});
@@ -53,6 +57,10 @@ export function createBot(rest = null) {
     try {
       await handler(ix);
     } catch (e) {
+      if (e.code === 10062 || e.code === 40060) {
+        console.warn(`[${ix.commandName}] Interakció már lezárult (${e.code}).`);
+        return;
+      }
       console.error(`[${ix.commandName}]`, e);
       const payload = { embeds: [err('Error', e.message || 'Something went wrong.')], flags: MessageFlags.Ephemeral };
       if (ix.deferred || ix.replied) await ix.editReply(payload).catch(() => {});

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { fetch as uFetch, ProxyAgent } from 'undici';
 
 const API_BASE = 'https://discord.com/api/v9';
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9200 Chrome/134.0.6998.205 Electron/35.7.5 Safari/537.36';
@@ -54,8 +55,10 @@ let adSessionId = randomUUID();
 let heartbeatSessionId = randomUUID();
 
 export class DiscordUserAPI {
-  constructor(token) {
+  constructor(token, options = {}) {
     this.token = token.replace(/^Bearer\s+/i, '').trim();
+    this.proxyUrl = options.proxyUrl || null;
+    this.agent = this.proxyUrl ? new ProxyAgent(this.proxyUrl) : null;
   }
 
   headers() {
@@ -70,13 +73,26 @@ export class DiscordUserAPI {
     };
   }
 
-  async request(method, path, body = null, extraHeaders = {}) {
+  async request(method, path, body = null, extraHeaders = {}, customProxy = null) {
     await resolveBuildNumber();
     const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
     const opts = { method, headers: { ...this.headers(), ...extraHeaders } };
     if (body) opts.body = JSON.stringify(body);
 
-    const res = await fetch(url, opts);
+    const activeProxy = customProxy || this.proxyUrl;
+    let dispatcher = null;
+    if (customProxy) {
+      dispatcher = new ProxyAgent(customProxy);
+    } else if (this.agent) {
+      dispatcher = this.agent;
+    }
+
+    if (dispatcher) {
+      opts.dispatcher = dispatcher;
+    }
+
+    const fetchFn = dispatcher ? uFetch : fetch;
+    const res = await fetchFn(url, opts);
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -90,8 +106,8 @@ export class DiscordUserAPI {
     return data;
   }
 
-  get(path, headers = {}) { return this.request('GET', path, null, headers); }
-  post(path, body, headers = {}) { return this.request('POST', path, body, headers); }
+  get(path, headers = {}, customProxy = null) { return this.request('GET', path, null, headers, customProxy); }
+  post(path, body, headers = {}, customProxy = null) { return this.request('POST', path, body, headers, customProxy); }
 
   getCurrentUser() { return this.get('/users/@me'); }
 
@@ -118,8 +134,9 @@ export class DiscordUserAPI {
    * `/quests/@me` returns every quest offered to the account once the build
    * number is current. The placement endpoints are only consulted when it comes
    * back empty, since each one costs a round trip.
+   * Támogatja a célzott proxyn keresztüli lekérést is (ország-specifikus orbokhoz).
    */
-  async fetchAllQuests() {
+  async fetchAllQuests(customProxy = null) {
     const map = new Map();
 
     const add = (raw) => {
@@ -135,18 +152,18 @@ export class DiscordUserAPI {
     };
 
     try {
-      const me = await this.get('/quests/@me');
+      const me = await this.get('/quests/@me', {}, customProxy);
       for (const q of me.quests || []) add(q);
       for (const q of me.excluded_quests || []) add(q);
     } catch (e) {
-      console.warn('quests/@me failed:', e.message);
+      // quiet on regional fetch
     }
 
     if (map.size) return [...map.values()];
 
     for (const p of [3, 11, 12, 47, 50, 59, 62]) {
       try {
-        const d = await this.get(`/quests/get-decisions?placement=${p}&num_decisions_requested=15&${this.questQuery()}`);
+        const d = await this.get(`/quests/get-decisions?placement=${p}&num_decisions_requested=15&${this.questQuery()}`, {}, customProxy);
         for (const decision of d.decisions || []) {
           if (decision.quest) add(decision.quest);
           const cc = decision.creative?.creative_content;
@@ -158,17 +175,17 @@ export class DiscordUserAPI {
     return [...map.values()];
   }
 
-  async getQuests() {
-    return this.fetchAllQuests();
+  async getQuests(customProxy = null) {
+    return this.fetchAllQuests(customProxy);
   }
 
-  enrollQuest(questId, trafficSealed = null) {
+  enrollQuest(questId, trafficSealed = null, customProxy = null) {
     return this.post(`/quests/${questId}/enroll`, {
       location: 11,
       is_targeted: false,
       metadata_sealed: null,
       traffic_metadata_sealed: trafficSealed,
-    });
+    }, {}, customProxy);
   }
 
   sendVideoProgress(questId, timestamp) {

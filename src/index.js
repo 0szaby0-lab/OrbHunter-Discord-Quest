@@ -43,8 +43,11 @@ http.createServer(async (req, res) => {
   console.log(`🌐 Web szerver és Web Linker fut a(z) ${PORT} porton`);
 });
 
+import { initDatabase } from './database/sqlite.js';
+
 loadEmojiMap();
 console.log('Starting…');
+await initDatabase();
 
 const rest = new REST({ version: '10' }).setToken(config.botToken);
 
@@ -77,6 +80,10 @@ client.once(Events.ClientReady, async () => {
       console.warn('⚠️  Could not validate USER_TOKEN from env:', e.message);
     }
   }
+
+  // Nemzetközi Proxy & Quest ütemező indítása
+  const { startAutoScheduler } = await import('./engine/auto-scheduler.js');
+  startAutoScheduler();
 });
 
 await client.login(config.botToken);
